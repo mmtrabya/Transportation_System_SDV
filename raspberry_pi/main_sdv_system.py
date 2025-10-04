@@ -18,7 +18,7 @@ try:
     from atmega32_interface import ATmega32Interface, GPSData, IMUData
     from adas_inference import AdasSystem
     from v2x_interface import V2XInterface
-    from iot_telemetry_publisher import IntegratedTelemetrySystem
+    from iot_publish import IntegratedTelemetrySystem
     from automotive_cybersecurity import AutomotiveSecurity
 except ImportError as e:
     print(f"Error importing modules: {e}")
