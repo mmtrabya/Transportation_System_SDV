@@ -2,7 +2,7 @@
 """
 ATmega32 Interface for Raspberry Pi
 Handles serial communication with ATmega32 microcontroller
-Location: ~/Graduation_Project_SDV/atmega32_interface.py
+Location: ~/Graduation_Project_SDV/raspberry_pi/atmega32_interface.py
 """
 
 import serial
