@@ -1,0 +1,36 @@
+/*
+ * Simple LCD 20x4 Test
+ * Quick test to verify basic functionality
+ */
+
+#define F_CPU 16000000UL
+#include <util/delay.h>
+#include "STD_TYPES.h"
+#include "HAL/LCD/LCD_interface.h"
+
+int main(void)
+{
+    // Initialize LCD
+    LCD_initi();
+    _delay_ms(100);
+    
+    // Simple 4-line test
+    LCD_GoTo(LCD_Line_0, 0);
+    LCD_WriteString("Line 0: Hello!");
+    
+    LCD_GoTo(LCD_line_1, 0);
+    LCD_WriteString("Line 1: 20x4 LCD");
+    
+    LCD_GoTo(LCD_line_2, 0);
+    LCD_WriteString("Line 2: Working");
+    
+    LCD_GoTo(LCD_line_3, 0);
+    LCD_WriteString("Line 3: Perfect!");
+    
+    while(1)
+    {
+        // Stay here
+    }
+    
+    return 0;
+}

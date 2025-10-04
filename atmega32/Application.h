@@ -1,0 +1,72 @@
+/*
+ * Application.h
+ *
+ * Created: 9/30/2025 12:45:40 PM
+ *  Author: Eng Mahmoud
+ */ 
+
+
+#ifndef APPLICATION_H_
+#define APPLICATION_H_
+
+#define F_CPU 16000000
+#include <util/delay.h>
+
+#include "STD_TYPES.h"
+#include "BIT_MATH.h"
+
+#include "MCAL/DIO/DIO_INTERFACE.h"
+
+#include "MCAL/ADC/ADC_INTERFACE.h"
+#include "CFG/ADC_config.h"
+
+#include "MCAL/EEPROM/EEPROM_Int.h"
+
+#include "MCAL/GIE/GI_interface.h"
+#include "MCAL/EXIT/EXIT_interface.h"
+#include "CFG/EXIT_config.h"
+
+#include "MCAL/SPI/SPI.h"
+#include "MCAL/String/String.h"
+
+#include "MCAL/TIMER0/TIMR0_interface.h"
+#include "CFG/TIMR0_config.h"
+
+#include "MCAL/TIMER1/VERSION 2 IF YOU USE ULTRA SONIC/TIMR1_interface.h"
+#include "CFG/TIMR1_config.h"
+
+#include "MCAL/TWI/TWI_interface.h"
+#include "MCAL/TWI/TWI_private.h"
+
+#include "MCAL/UART/UART_interface.h"
+#include "CFG/UART_config.h"
+
+#include "MCAL/WTD/WTD_interface.h"
+#include "CFG/WDT_config.h"
+
+#include "HAL/Buzzer/BUZZER_INTERFACE.h"
+
+#include "HAL/DCM/DCM_interface.h"
+#include "CFG/DCM_config.h"
+
+#include "HAL/GPS/GPS_Int.h"
+
+#include "HAL/LCD/LCD_interface.h"
+#include "HAL/LCD/LCD_privatre.h"
+#include "CFG/LCD_config.h"
+
+#include "HAL/LED/LEDS_INTERFACE.h"
+
+#include "HAL/MPU6050/MPU_Int.h"
+#include "HAL/QMC5883L/QMC_Int.h"
+
+#include "HAL/ULTRASO/ULTRASO_interface.h"
+#include "CFG/ULTRASO_config.h"
+
+
+
+
+
+
+
+#endif /* APPLICATION_H_ */
