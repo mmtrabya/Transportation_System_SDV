@@ -28,7 +28,7 @@ class TelemetryConfig:
     """Telemetry configuration"""
     
     # MQTT Broker
-    MQTT_BROKER = "broker.hivemq.com"  # Public broker for testing
+    MQTT_BROKER = "localhost"  # Public broker for testing
     MQTT_PORT = 1883
     MQTT_KEEPALIVE = 60
     

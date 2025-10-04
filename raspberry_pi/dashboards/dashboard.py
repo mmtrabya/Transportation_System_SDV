@@ -19,7 +19,7 @@ from typing import Dict
 
 class DashboardConfig:
     """Dashboard configuration"""
-    MQTT_BROKER = "broker.hivemq.com"
+    MQTT_BROKER = "localhost"
     MQTT_PORT = 1883
     VEHICLE_ID = "SDV_001"
     
