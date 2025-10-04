@@ -478,7 +478,7 @@ def main():
     # Register callbacks
     def on_gps_data(gps: GPSData):
         if gps.valid:
-            print(f"GPS: {gps.latitude:.6f}, {gps.longitude:.6f}, {gps.speed:.1f} km/h")
+            print("GPS data received and is valid.")
     
     def on_imu_data(imu: IMUData):
         print(f"IMU: Roll={imu.roll:.1f}°, Pitch={imu.pitch:.1f}°, Yaw={imu.yaw:.1f}°")
