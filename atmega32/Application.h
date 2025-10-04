@@ -15,9 +15,9 @@
 #include "STD_TYPES.h"
 #include "BIT_MATH.h"
 
-#include "MCAL/DIO/DIO_INTERFACE.h"
+#include "MCAL/DIO/DIO_interface.h"
 
-#include "MCAL/ADC/ADC_INTERFACE.h"
+#include "MCAL/ADC/ADC_interface.h"
 #include "CFG/ADC_config.h"
 
 #include "MCAL/EEPROM/EEPROM_Int.h"

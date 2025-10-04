@@ -8,8 +8,8 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/home/mmtrabya/Graduation_Project_SDV/include",
-                "/home/mmtrabya/Graduation_Project_SDV/src",
+                "/home/mmtrabya/Graduation_Project_SDV/esp32/include",
+                "/home/mmtrabya/Graduation_Project_SDV/esp32/src",
                 "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                 "/home/mmtrabya/Graduation_Project_SDV/.pio/libdeps/esp32dev/ArduinoJson/src",
                 "/home/mmtrabya/Graduation_Project_SDV/.pio/libdeps/esp32dev/PubSubClient/src",
@@ -247,8 +247,8 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/home/mmtrabya/Graduation_Project_SDV/include",
-                    "/home/mmtrabya/Graduation_Project_SDV/src",
+                    "/home/mmtrabya/Graduation_Project_SDV/esp32/include",
+                    "/home/mmtrabya/Graduation_Project_SDV/esp32/src",
                     "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                     "/home/mmtrabya/Graduation_Project_SDV/.pio/libdeps/esp32dev/ArduinoJson/src",
                     "/home/mmtrabya/Graduation_Project_SDV/.pio/libdeps/esp32dev/PubSubClient/src",
