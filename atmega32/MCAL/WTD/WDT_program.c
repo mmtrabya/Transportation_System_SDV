@@ -2,7 +2,7 @@
  * WDT_program.c
  *
  * Created: 4/8/2024 5:52:29 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #include "../../STD_TYPES.h"

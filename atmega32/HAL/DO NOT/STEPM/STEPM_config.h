@@ -2,7 +2,7 @@
  * STEPM_config.h
  *
  * Created: 4/20/2024 3:10:23 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

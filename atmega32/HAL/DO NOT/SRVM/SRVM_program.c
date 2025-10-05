@@ -2,7 +2,7 @@
  * SRVM_program.c
  *
  * Created: 3/4/2024 7:04:55 AM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #include "STD_TYPES.h"

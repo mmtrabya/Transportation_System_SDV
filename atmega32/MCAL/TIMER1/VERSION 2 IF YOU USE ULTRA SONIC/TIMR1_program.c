@@ -2,7 +2,7 @@
  * TIMR1_program.c
  *
  * Created: 4/22/2024 4:12:42 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #include "../../../STD_TYPES.h"

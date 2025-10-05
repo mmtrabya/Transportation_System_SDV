@@ -2,7 +2,7 @@
  * REGS.h
  * AVR ATmega32 Register Definitions
  * Created: 9/30/2025 12:36:47 PM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  * CORRECTED: Fixed Timer1 register definitions
  */ 
 

@@ -2,7 +2,7 @@
  * STEPM_program.c
  *
  * Created: 4/20/2024 3:09:50 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 #define  F_CPU  16000000UL 
 #include <UTIL/delay.h>

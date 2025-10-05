@@ -2,7 +2,7 @@
  * UART_config.h
  * UART Configuration for ATmega32
  * Created: 4/13/2024 5:03:01 AM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  * CORRECTED: Added baud rate and buffer size configuration
  */ 
 

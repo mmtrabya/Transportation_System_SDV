@@ -2,7 +2,7 @@
  * ADC_program.c
  *
  * Created: 2/11/2024 4:46:05 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 //UTAL

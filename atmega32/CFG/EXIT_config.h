@@ -2,7 +2,7 @@
  * EXIT_config.h
  *
  * Created: 2/10/2024 1:51:58 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

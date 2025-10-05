@@ -2,7 +2,7 @@
  * EXIT_interface.h
  *
  * Created: 2/10/2024 1:51:41 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

@@ -2,7 +2,7 @@
  * Application.h
  *
  * Created: 9/30/2025 12:45:40 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

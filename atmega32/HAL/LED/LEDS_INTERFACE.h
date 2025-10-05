@@ -1,7 +1,7 @@
 #ifndef LEDS_INTERFACE_H_
 #define LEDS_INTERFACE_H_
 
-#include "../../MCAL/DIO/DIO_INTERFACE.h"
+#include "../../MCAL/DIO/DIO_interface.h"
 #include"../../STD_TYPES.h"
 
 

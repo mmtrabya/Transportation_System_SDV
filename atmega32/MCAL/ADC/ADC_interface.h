@@ -2,7 +2,7 @@
  * ADC_interface.h
  *
  * Created: 2/11/2024 4:43:18 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

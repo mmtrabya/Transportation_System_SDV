@@ -1,7 +1,7 @@
 #ifndef BUZZER_INTERFACE_H_
 #define BUZZER_INTERFACE_H_
 
-#include "../../MCAL/DIO/DIO_INTERFACE.h"
+#include "../../MCAL/DIO/DIO_interface.h"
 #include"../../STD_TYPES.h"
 
 

@@ -2,7 +2,7 @@
  * TIMR0_interface.h
  *
  * Created: 2/16/2024 3:03:18 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

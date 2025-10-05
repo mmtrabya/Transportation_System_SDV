@@ -2,7 +2,7 @@
  * EXIT_program.c
  *
  * Created: 2/10/2024 1:52:16 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 // UTAL

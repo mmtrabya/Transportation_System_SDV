@@ -2,7 +2,7 @@
  * ULTRASO_program.c
  *
  * Created: 4/22/2024 4:32:47 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  *  CORRECTED VERSION - Fixed all critical bugs
  */ 
 

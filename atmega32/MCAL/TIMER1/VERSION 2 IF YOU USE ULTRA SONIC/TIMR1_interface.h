@@ -2,7 +2,7 @@
  * TIMR1_interface.h
  *
  * Created: 4/22/2024 4:12:58 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

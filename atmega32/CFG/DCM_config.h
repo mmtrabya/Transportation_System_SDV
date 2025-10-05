@@ -4,7 +4,7 @@
  * Group 1: Motor A & C share Enable Pin 1
  * Group 2: Motor B & D share Enable Pin 2
  * Created: 2/24/2024 1:10:24 PM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #ifndef DCM_CONFIG_H_

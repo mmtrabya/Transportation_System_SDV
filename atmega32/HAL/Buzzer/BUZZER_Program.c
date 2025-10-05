@@ -1,5 +1,5 @@
 
-#include "../../MCAL/DIO/DIO_INTERFACE.h"
+#include "../../MCAL/DIO/DIO_interface.h"
 #include"../../STD_TYPES.h"
 #include "BUZZER_INTERFACE.h"
 

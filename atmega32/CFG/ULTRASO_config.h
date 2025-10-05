@@ -2,14 +2,14 @@
  * ULTRASO_config.h
  *
  * Created: 2/11/2024 4:43:46 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 
 #ifndef ULTRASO_CONFIG_H_
 #define ULTRASO_CONFIG_H_
 
-#include "../MCAL/DIO/DIO_INTERFACE.h"
+#include "../MCAL/DIO/DIO_interface.h"
 
 // System Clock Frequency
 #define  F_CPU 16000000UL

@@ -2,7 +2,7 @@
  * WDT_interface.h
  *
  * Created: 4/8/2024 5:52:45 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

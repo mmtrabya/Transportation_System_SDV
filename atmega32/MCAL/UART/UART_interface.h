@@ -2,7 +2,7 @@
  * UART_interface.h
  * UART Driver Interface for ATmega32
  * Created: 4/13/2024 2:41:33 AM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  * UPDATED: Added utility functions
  */ 
 

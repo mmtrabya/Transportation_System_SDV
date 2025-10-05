@@ -2,7 +2,7 @@
  * ADC_config.h
  *
  * Created: 2/11/2024 4:43:46 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

@@ -3,7 +3,7 @@
  * DC Motor Driver with Custom Paired Motor Control
  * Group 1: Motor A & C | Group 2: Motor B & D
  * Created: 2/24/2024 1:10:44 PM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #ifndef DCM_INTERFACE_H_

@@ -2,7 +2,7 @@
  * GI_interface.h
  *
  * Created: 2/10/2024 1:53:10 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

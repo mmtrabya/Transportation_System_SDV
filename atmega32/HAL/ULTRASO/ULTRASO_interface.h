@@ -2,7 +2,7 @@
  * ULTRASO_interface.h
  *
  * Created: 4/22/2024 4:33:03 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

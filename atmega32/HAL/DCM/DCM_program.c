@@ -2,12 +2,12 @@
  * DCM_program.c
  * H-Bridge DC Motor Driver with Custom Grouping
  * Group 1: Motor A & C | Group 2: Motor B & D
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 #include "../../STD_TYPES.h"
 #include "../../BIT_MATH.h"
-#include "../../MCAL/DIO/DIO_INTERFACE.h"
+#include "../../MCAL/DIO/DIO_interface.h"
 #include "../../MCAL/TIMER0/TIMR0_interface.h"
 #include "../../CFG/TIMR0_config.h"
 #include "DCM_interface.h"

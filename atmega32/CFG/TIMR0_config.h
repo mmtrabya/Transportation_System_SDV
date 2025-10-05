@@ -2,7 +2,7 @@
  * TIMR0_config.h
  *
  * Created: 2/16/2024 3:03:34 PM
- *  Author: Eng Mahmoud
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

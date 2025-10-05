@@ -2,7 +2,7 @@
  * UART_program.c
  * UART Driver for ATmega32 - USB-to-TTL Compatible
  * Created: 4/13/2024 2:41:18 AM
- * Author: Eng Mahmoud
+ * Author: Mohammed Tarabay & Mahmoud Mahgoup
  * CORRECTED: Fixed RX_String bug and added timeout protection
  */ 
 
