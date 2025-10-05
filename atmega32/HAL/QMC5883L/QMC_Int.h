@@ -1,6 +1,6 @@
 #ifndef QMC_INT_H
 #define QMC_INT_H
-#define F_CPU  8000000UL
+//#define F_CPU  8000000UL
 #include "../../STD_TYPES.h"
 #include "../../MCAL/I2C/I2C_Int.h"
 #include <util/delay.h>

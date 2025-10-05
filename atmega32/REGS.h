@@ -1,3 +1,6 @@
+/* NOTE: This file has register redefinitions. */
+/* Consider using <avr/io.h> directly instead. */
+
 /*
  * REGS.h
  * AVR ATmega32 Register Definitions

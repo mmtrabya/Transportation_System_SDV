@@ -12,7 +12,7 @@
 #include "../MCAL/DIO/DIO_interface.h"
 
 // System Clock Frequency
-#define  F_CPU 16000000UL
+//#define  F_CPU 16000000UL
 
 // Port Definitions
 #define ULTRASONIC_TRIG_PORT     DIO_PORTA

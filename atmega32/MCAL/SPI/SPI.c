@@ -13,7 +13,6 @@
  * Updated: Optimized for 16MHz operation
  */
 
-#include <avr/io.h>
 #include "SPI.h"
 #include "../../REGS.h"
 

@@ -8,19 +8,19 @@
 
 #define F_CPU 16000000UL
 #include <util/delay.h>
-
+#include <avr/io.h>
 /* UTILITIES */
 #include "../../STD_TYPES.h"
 #include "../../BIT_MATH.h"
-#include "../../String.h"
+#include "../../MCAL/String/String.h"
 
 /* MCAL */
 #include "../../MCAL/TWI/TWI_interface.h"
 
 /* HAL */
-#include "LCD_I2C_interface.h"
-#include "../../CFG/LCD_I2C_config.h"
-#include "LCD_I2C_private.h"
+#include "LCD_interface.h"
+#include "../../CFG/LCD_config.h"
+#include "LCD_private.h"
 
 /* Backlight state variable */
 static u8 backlightState = (1 << LCD_BL_BIT);

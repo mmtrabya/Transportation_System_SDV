@@ -264,6 +264,10 @@ extern void Handle_BuzzerControl(uint8_t state);
  */
 extern void Handle_Reset(void);
 
+
+/* Update system uptime (call periodically) */
+void Protocol_UpdateUptime(void);
+
 #endif /* RASPBERRY_PI_PROTOCOL_H */
 
 
@@ -487,5 +491,6 @@ uint8_t Protocol_CalculateChecksum(uint8_t cmd, uint8_t length, const uint8_t* d
     
     return checksum;
 }
+void Protocol_UpdateUptime(void);
 
 #endif /* IMPLEMENTATION_EXAMPLE */

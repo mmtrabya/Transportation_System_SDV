@@ -216,3 +216,17 @@ void UART_TX_Float(f32 number, u8 decimal_places)
         frac_part -= digit;
     }
 }
+// Wrapper functions for compatibility
+void UART_Init(void) {
+    UART_INTI();
+}
+
+void UART_SendByte(u8 data) {
+    UART_TX_Char(data);
+}
+
+u8 UART_Read(void) {
+    u8 data;
+    UART_RX_Char(&data);
+    return data;
+}

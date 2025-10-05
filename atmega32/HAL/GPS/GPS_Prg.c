@@ -32,7 +32,7 @@ bool_t check_GPRMC(c8* buffer)
 		first6[num] = buffer[num];
 	}
 	first6[6] = '\0';
-	return string_compare(first6, "$GPRMC");
+	return string_compare((u8*)first6, (u8*)"$GPRMC");
 }
 
 void Process_Data(u8 numCom, c8* substring, GPSData* data)
@@ -90,7 +90,7 @@ void Extract_Comma(c8* buffer, GPSData* data)
 		}
 		else
 		{
-			u8 len = string_length(currentToken);
+			u8 len = string_length((s8*)currentToken);
 			currentToken[len] = buffer[i];
 			currentToken[len + 1] = '\0';
 		}

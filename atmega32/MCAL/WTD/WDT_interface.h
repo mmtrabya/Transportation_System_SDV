@@ -25,5 +25,9 @@ void WDT_Stop(void);
  */
 void WDT_Reset(void);
 
+void WDT_Enable(u8 timeout);
+
+void WDT_Disable(void);
+
 
 #endif /* WDT_INTERFACE_H_ */

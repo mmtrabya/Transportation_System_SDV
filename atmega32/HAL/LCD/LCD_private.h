@@ -12,10 +12,10 @@
 #include "LCD_interface.h"
 
 /* Private Functions */
-static void LCD_I2C_SendByte     (u8 data, u8 mode);
-static void LCD_I2C_SendNibble   (u8 nibble, u8 mode);
-static void LCD_I2C_PulseEnable  (u8 data);
-static void LCD_I2C_WriteByte    (u8 data);
+// static void LCD_I2C_SendByte     (u8 data, u8 mode);
+// static void LCD_I2C_SendNibble   (u8 nibble, u8 mode);
+// static void LCD_I2C_PulseEnable  (u8 data);
+// static void LCD_I2C_WriteByte    (u8 data);
 
 /* Mode definitions */
 #define LCD_MODE_COMMAND    0

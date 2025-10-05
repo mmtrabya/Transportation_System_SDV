@@ -10,6 +10,8 @@
 
 #include "raspberry_pi_protocol.h"
 #include "../Application.h"
+/* Forward declaration */
+static void Protocol_ProcessCommand(u8 cmd, const u8* data, u8 length);
 
 /* ==================== STATE MACHINE ==================== */
 

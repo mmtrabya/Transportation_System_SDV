@@ -24,6 +24,7 @@
                          /* TWI REGISTERS */
 
 // TWI Bit Rate Register
+#ifndef TWBR
 #define TWBR         (*(volatile u8*)0x20)
 
 // TWI Control Register
@@ -47,6 +48,7 @@
 
 // TWI (Slave) Address Register
 #define TWAR         (*(volatile u8*)0x22)
+#endif /* TWBR */
 #define TWGCE        0
 
 

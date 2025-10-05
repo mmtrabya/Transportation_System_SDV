@@ -12,7 +12,7 @@
 #include "../../STD_TYPES.h"
 
 /*
- * Function: UART_INTI
+ * Function: UART_Init
  * Description: Initializes UART with default settings
  *              - Baud rate: 9600 (configurable in UART_config.h)
  *              - Data bits: 8
@@ -22,7 +22,7 @@
  * Parameters: None
  * Returns: None
  */
-void UART_INTI(void);
+void UART_Init(void);
 
 /*
  * Function: UART_TX_Char
@@ -84,5 +84,9 @@ void UART_TX_Number(S32 number);
  * Returns: None
  */
 void UART_TX_Float(f32 number, u8 decimal_places);
+
+void UART_SendByte(u8 data);
+
+u8 UART_Read(void);
 
 #endif /* UART_INTERFACE_H_ */

@@ -89,3 +89,11 @@ void WDT_Reset(void)
     /* Reset the Watchdog Timer */
     __asm__ __volatile__ ("wdr");
 }
+// Wrapper functions for compatibility
+void WDT_Enable(u8 timeout) {
+    WDT_Start(timeout);
+}
+
+void WDT_Disable(void) {
+    WDT_Stop();
+}

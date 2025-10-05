@@ -178,3 +178,27 @@ void TWI_receiveMasterDataByteNack(u8* RxData)
 		SET_BIT(TWCR,TWEA);
 	}
 }
+// Wrapper functions for compatibility
+void TWI_start(void) {
+    TWI_sendStartCondition();
+}
+
+void TWI_stop(void) {
+    TWI_sendStopCondition();
+}
+
+void TWI_writeByte(u8 data) {
+    TWI_sendMasterDataByte(data);
+}
+
+u8 TWI_readByteWithACK(void) {
+    u8 data;
+    TWI_receiveMasterDataByteAck(&data);
+    return data;
+}
+
+u8 TWI_readByteWithNACK(void) {
+    u8 data;
+    TWI_receiveMasterDataByteNack(&data);
+    return data;
+}

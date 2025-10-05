@@ -9,7 +9,10 @@
 #ifndef APPLICATION_H_
 #define APPLICATION_H_
 
-#define F_CPU 16000000
+#ifndef F_CPU
+#define F_CPU 16000000UL
+#endif
+
 #include <util/delay.h>
 
 #include "STD_TYPES.h"
@@ -32,7 +35,7 @@
 #include "MCAL/TIMER0/TIMR0_interface.h"
 #include "CFG/TIMR0_config.h"
 
-#include "MCAL/TIMER1/VERSION 2 IF YOU USE ULTRA SONIC/TIMR1_interface.h"
+#include "MCAL/TIMER1/VERSION_2_ULTRA_SONIC/TIMR1_interface.h"
 #include "CFG/TIMR1_config.h"
 
 #include "MCAL/TWI/TWI_interface.h"
@@ -41,7 +44,7 @@
 #include "MCAL/UART/UART_interface.h"
 #include "CFG/UART_config.h"
 
-#include "MCAL/WTD/WTD_interface.h"
+#include "MCAL/WTD/WDT_interface.h"
 #include "CFG/WDT_config.h"
 
 #include "HAL/Buzzer/BUZZER_INTERFACE.h"
@@ -52,7 +55,7 @@
 #include "HAL/GPS/GPS_Int.h"
 
 #include "HAL/LCD/LCD_interface.h"
-#include "HAL/LCD/LCD_privatre.h"
+#include "HAL/LCD/LCD_private.h"
 #include "CFG/LCD_config.h"
 
 #include "HAL/LED/LEDS_INTERFACE.h"

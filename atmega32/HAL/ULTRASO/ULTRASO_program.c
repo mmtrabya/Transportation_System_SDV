@@ -7,15 +7,16 @@
  */ 
 
 #define   F_CPU 16000000UL
-#include <UTIL/delay.h>
+#include <util/delay.h>
+#include <avr/io.h>
 
 #include "../../STD_TYPES.h"
 #include "../../BIT_MATH.h"
-
+#include "../../CFG/ULTRASO_config.h"
 #include "../../MCAL/DIO/DIO_interface.h"
 
 
-#include "../../MCAL/TIMR1/VERSION_2/TIMR1_interface.h"
+#include "../../MCAL/TIMER1/VERSION_2_ULTRA_SONIC/TIMR1_interface.h"
 #include "../../CFG/TIMR1_config.h"
 
 #include "ULTRASO_interface.h"

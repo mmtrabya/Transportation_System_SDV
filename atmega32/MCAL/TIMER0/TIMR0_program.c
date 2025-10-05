@@ -15,7 +15,7 @@
 
 static void(*Private_PCallBackOVF)(void) = NULL;
 static void(*Private_PCallBackCTC)(void) = NULL;
-volatile static u16 TIMR0_CTC_COUNTER ; 
+static volatile u16 TIMR0_CTC_COUNTER ; 
 
 void TIMR0_INTI  (void)
 {
