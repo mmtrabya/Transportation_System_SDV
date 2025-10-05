@@ -28,7 +28,7 @@
                 "${workspaceFolder}/atmega32/MCAL/SPI",
                 "${workspaceFolder}/atmega32/MCAL/String",
                 "${workspaceFolder}/atmega32/MCAL/TIMER0",
-                "${workspaceFolder}/atmega32/MCAL/TIMER1/VERSION 2 IF YOU USE ULTRA SONIC",
+                "${workspaceFolder}/atmega32/MCAL/TIMER1/VERSION_2_ULTRA_SONIC",
                 "${workspaceFolder}/atmega32/MCAL/TWI",
                 "${workspaceFolder}/atmega32/MCAL/UART",
                 "${workspaceFolder}/atmega32/MCAL/WTD",
