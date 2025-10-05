@@ -73,7 +73,7 @@ Archive member included to satisfy reference by file (symbol)
 /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a(_negsi2.o)
                               /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a(_divmodsi4.o) (__negsi2)
 /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a(_exit.o)
-                              /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o (exit)
+                              /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o (exit)
 /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a(_tablejump2.o)
                               build/MCAL/ADC/ADC_program.o (__tablejump2__)
 /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a(_copy_data.o)
@@ -109,8 +109,8 @@ AX                  0x4               build/HAL/MPU6050/MPU_Prg.o
 
 Discarded input sections
 
- .data          0x0000000000000000        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
- .bss           0x0000000000000000        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .data          0x0000000000000000        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
+ .bss           0x0000000000000000        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
  .text          0x0000000000000000        0x0 build/main.o
  .data          0x0000000000000000        0x0 build/main.o
  .bss           0x0000000000000000        0x0 build/main.o
@@ -687,7 +687,7 @@ user_signatures  0x0000000000850000 0x0000000000000400 rw !x
 
 Linker script and memory map
 
-LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 LOAD build/main.o
 LOAD build/APP/raspberry_pi_protocol.o
 LOAD build/MCAL/DIO/DIO_program.o
@@ -715,9 +715,9 @@ START GROUP
 LOAD /usr/lib/gcc/avr/5.4.0/avr5/libgcc.a
 LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/libm.a
 LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/libc.a
-LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/libatmega32.a
+LOAD /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/libatmega32a.a
 END GROUP
-                0x0000000000000000                __TEXT_REGION_ORIGIN__ = DEFINED (__TEXT_REGION_ORIGIN__)?__TEXT_REGION_ORIGIN__:0x0
+                [0x0000000000000000]                __TEXT_REGION_ORIGIN__ = DEFINED (__TEXT_REGION_ORIGIN__)?__TEXT_REGION_ORIGIN__:0x0
                 [0x0000000000800060]                __DATA_REGION_ORIGIN__ = DEFINED (__DATA_REGION_ORIGIN__)?__DATA_REGION_ORIGIN__:0x800060
                 [0x0000000000008000]                __TEXT_REGION_LENGTH__ = DEFINED (__TEXT_REGION_LENGTH__)?__TEXT_REGION_LENGTH__:0x20000
                 [0x0000000000000800]                __DATA_REGION_LENGTH__ = DEFINED (__DATA_REGION_LENGTH__)?__DATA_REGION_LENGTH__:0xffa0
@@ -819,7 +819,7 @@ END GROUP
 
 .text           0x0000000000000000     0x2260
  *(.vectors)
- .vectors       0x0000000000000000       0x54 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .vectors       0x0000000000000000       0x54 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
                 0x0000000000000000                __vectors
                 0x0000000000000000                __vector_default
  *(.vectors)
@@ -854,13 +854,13 @@ END GROUP
  SORT(*)(.ctors)
  SORT(*)(.dtors)
  *(.init0)
- .init0         0x00000000000000a0        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .init0         0x00000000000000a0        0x0 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
                 0x00000000000000a0                __init
  *(.init0)
  *(.init1)
  *(.init1)
  *(.init2)
- .init2         0x00000000000000a0        0xc /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .init2         0x00000000000000a0        0xc /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
  *(.init2)
  *(.init3)
  *(.init3)
@@ -879,10 +879,10 @@ END GROUP
  *(.init8)
  *(.init8)
  *(.init9)
- .init9         0x00000000000000d2        0x8 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .init9         0x00000000000000d2        0x8 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
  *(.init9)
  *(.text)
- .text          0x00000000000000da        0x4 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .text          0x00000000000000da        0x4 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
                 0x00000000000000da                __vector_12
                 0x00000000000000da                __bad_interrupt
                 0x00000000000000da                __vector_6
@@ -1456,7 +1456,7 @@ END GROUP
 .note.gnu.avr.deviceinfo
                 0x0000000000000000       0x3c
  .note.gnu.avr.deviceinfo
-                0x0000000000000000       0x3c /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+                0x0000000000000000       0x3c /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 
 .note.gnu.build-id
  *(.note.gnu.build-id)
@@ -1481,22 +1481,22 @@ END GROUP
 
 .debug_info     0x0000000000000000      0x4e6
  *(.debug_info .gnu.linkonce.wi.*)
- .debug_info    0x0000000000000000      0x4e6 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .debug_info    0x0000000000000000      0x4e6 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 
 .debug_abbrev   0x0000000000000000      0x4a3
  *(.debug_abbrev)
- .debug_abbrev  0x0000000000000000      0x4a3 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .debug_abbrev  0x0000000000000000      0x4a3 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 
 .debug_line     0x0000000000000000       0x1a
  *(.debug_line .debug_line.* .debug_line_end)
- .debug_line    0x0000000000000000       0x1a /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .debug_line    0x0000000000000000       0x1a /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 
 .debug_frame
  *(.debug_frame)
 
 .debug_str      0x0000000000000000      0x196
  *(.debug_str)
- .debug_str     0x0000000000000000      0x196 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32.o
+ .debug_str     0x0000000000000000      0x196 /usr/lib/gcc/avr/5.4.0/../../../avr/lib/avr5/crtatmega32a.o
 
 .debug_loc
  *(.debug_loc)
@@ -1524,5 +1524,5 @@ END GROUP
 
 .debug_macro
  *(.debug_macro)
-OUTPUT(build/sdv_atmega32.elf elf32-avr)
+OUTPUT(build/sdv_atmega32a.elf elf32-avr)
 LOAD linker stubs

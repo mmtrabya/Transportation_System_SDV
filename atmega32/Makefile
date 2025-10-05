@@ -2,10 +2,10 @@
 # Location: atmega32/Makefile
 
 # Project name
-PROJECT = sdv_atmega32
+PROJECT = sdv_atmega32a
 
 # MCU settings
-MCU = atmega32
+MCU = atmega32a
 F_CPU = 16000000UL
 BAUD = 115200
 
@@ -24,7 +24,8 @@ AVRDUDE = avrdude
 BUILD_DIR = build
 
 # Compiler flags
-CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -DBAUD=$(BAUD)
+CFLAGS = -mmcu=$(MCU) -B /usr/lib/avr/lib -DF_CPU=$(F_CPU) -DBAUD=$(BAUD)
+CFLAGS += -B /usr/avr/lib
 CFLAGS += -Os -Wall -Wextra
 CFLAGS += -std=gnu99
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
