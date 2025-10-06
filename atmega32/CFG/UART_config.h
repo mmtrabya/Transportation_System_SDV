@@ -22,8 +22,8 @@
 #define UART_BAUD_57600     16
 #define UART_BAUD_115200    8
 
-// Select desired baud rate (default: 9600)
-#define UART_BAUD_RATE      UART_BAUD_9600
+// Select desired baud rate (default: 115200)
+#define UART_BAUD_RATE      UART_BAUD_115200
 
 /* Buffer and Timeout Configuration */
 #define UART_MAX_STRING_LENGTH    100    // Maximum string length for RX_String

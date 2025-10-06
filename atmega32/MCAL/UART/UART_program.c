@@ -230,3 +230,9 @@ u8 UART_Read(void) {
     UART_RX_Char(&data);
     return data;
 }
+
+void UART_SendString(const char* str) {
+    while (*str) {
+        UART_SendByte(*str++);
+    }
+}

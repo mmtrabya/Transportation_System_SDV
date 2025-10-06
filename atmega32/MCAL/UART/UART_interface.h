@@ -89,4 +89,6 @@ void UART_SendByte(u8 data);
 
 u8 UART_Read(void);
 
+void UART_SendString(const char* str);
+
 #endif /* UART_INTERFACE_H_ */

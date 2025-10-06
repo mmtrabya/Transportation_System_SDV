@@ -283,6 +283,8 @@ Discarded input sections
                 0x0000000000000000      0x108 build/MCAL/UART/UART_program.o
  .text.UART_TX_Float
                 0x0000000000000000       0xe2 build/MCAL/UART/UART_program.o
+ .text.UART_SendString
+                0x0000000000000000       0x18 build/MCAL/UART/UART_program.o
  .text          0x0000000000000000        0x0 build/MCAL/WTD/WDT_program.o
  .data          0x0000000000000000        0x0 build/MCAL/WTD/WDT_program.o
  .bss           0x0000000000000000        0x0 build/MCAL/WTD/WDT_program.o
@@ -1326,9 +1328,9 @@ END GROUP
                 0x0000000000800068                PROVIDE (__bss_start, .)
  *(.bss)
  *(.bss*)
- .bss.last_sensor_update.2247
+ .bss.last_sensor_update.2249
                 0x0000000000800068        0x4 build/main.o
- .bss.tick_counter.2248
+ .bss.tick_counter.2250
                 0x000000000080006c        0x4 build/main.o
  .bss.uart_byte
                 0x0000000000800070        0x1 build/main.o
