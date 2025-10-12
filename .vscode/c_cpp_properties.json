@@ -5,7 +5,8 @@
             "includePath": [
                 "/home/mmtrabya/Graduation_Project_SDV/esp32/include",
                 "/home/mmtrabya/Graduation_Project_SDV/esp32/src",
-                "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/cores/esp32"
+                "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/cores/esp32",
+                "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/variants/esp32"
             ],
             "defines": [
                 "PLATFORMIO=60118",
