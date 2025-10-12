@@ -6,7 +6,7 @@
  * 
  * Features:
  * - GPS Module (NEO-6M)
- * - IMU 9DOF (MPU6050 + QMC5883L)
+ * - IMU 9DOF (MPU9250 + QMC5883L)
  * - Motor Control (L298N - 4 motors)
  * - Ultrasonic Sensors (4x HC-SR04)
  * - Raspberry Pi Communication (UART)

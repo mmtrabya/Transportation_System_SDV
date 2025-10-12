@@ -52,7 +52,7 @@
 #include "HAL/DCM/DCM_interface.h"
 #include "CFG/DCM_config.h"
 
-#include "HAL/GPS/GPS_Int.h"
+
 
 #include "HAL/LCD/LCD_interface.h"
 #include "HAL/LCD/LCD_private.h"
@@ -60,9 +60,8 @@
 
 #include "HAL/LED/LEDS_INTERFACE.h"
 
-#include "HAL/MPU6050/MPU_Int.h"
-#include "HAL/QMC5883L/QMC_Int.h"
-
+#include "HAL/MPU9250/MPU9250_interface.h"
+#include "CFG/MPU9250_config.h"
 #include "HAL/ULTRASO/ULTRASO_interface.h"
 #include "CFG/ULTRASO_config.h"
 

@@ -15,7 +15,7 @@ import threading
 
 # Import all modules
 try:
-    from atmega32_interface import ATmega32Interface, GPSData, IMUData
+    from atmega32_interface import ATmega32Interface, IMUData
     from adas_inference import AdasSystem
     from v2x_interface import V2XInterface
     from iot_publish import IntegratedTelemetrySystem

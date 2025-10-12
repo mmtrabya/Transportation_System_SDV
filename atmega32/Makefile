@@ -52,10 +52,9 @@ INCLUDES += -I./MCAL/UART
 INCLUDES += -I./MCAL/WTD
 INCLUDES += -I./HAL/Buzzer
 INCLUDES += -I./HAL/DCM
-INCLUDES += -I./HAL/GPS
 INCLUDES += -I./HAL/LCD
 INCLUDES += -I./HAL/LED
-INCLUDES += -I./HAL/MPU6050
+INCLUDES += -I./HAL/MPU9250
 INCLUDES += -I./HAL/QMC5883L
 INCLUDES += -I./HAL/ULTRASO
 INCLUDES += -I./CFG
@@ -82,10 +81,9 @@ SRCS += $(wildcard MCAL/WTD/*.c)
 # Add all HAL source files
 SRCS += $(wildcard HAL/Buzzer/*.c)
 SRCS += $(wildcard HAL/DCM/*.c)
-SRCS += $(wildcard HAL/GPS/*.c)
 SRCS += $(wildcard HAL/LCD/*.c)
 SRCS += $(wildcard HAL/LED/*.c)
-SRCS += $(wildcard HAL/MPU6050/*.c)
+SRCS += $(wildcard HAL/MPU9250/*.c)
 SRCS += $(wildcard HAL/QMC5883L/*.c)
 SRCS += $(wildcard HAL/ULTRASO/*.c)
 
@@ -104,8 +102,8 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)/MCAL/String $(BUILD_DIR)/MCAL/TIMER0 
 	@mkdir -p $(BUILD_DIR)/MCAL/TIMER1/VERSION_2_ULTRA_SONIC
 	@mkdir -p $(BUILD_DIR)/MCAL/TWI $(BUILD_DIR)/MCAL/UART $(BUILD_DIR)/MCAL/WTD
-	@mkdir -p $(BUILD_DIR)/HAL/Buzzer $(BUILD_DIR)/HAL/DCM $(BUILD_DIR)/HAL/GPS
-	@mkdir -p $(BUILD_DIR)/HAL/LCD $(BUILD_DIR)/HAL/LED $(BUILD_DIR)/HAL/MPU6050
+	@mkdir -p $(BUILD_DIR)/HAL/Buzzer $(BUILD_DIR)/HAL/DCM 
+	@mkdir -p $(BUILD_DIR)/HAL/LCD $(BUILD_DIR)/HAL/LED $(BUILD_DIR)/HAL/MPU9250
 	@mkdir -p $(BUILD_DIR)/HAL/QMC5883L $(BUILD_DIR)/HAL/ULTRASO
 
 # Compile C files

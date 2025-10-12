@@ -2,7 +2,7 @@
  * TWI_program.c
  *
  * Created: 10/7/2023 10:36:30 PM
- *  Author: Kareem Hussein
+ *  Author: Mohammed Tarabay & Mahmoud Mahgoup
  */ 
 
 

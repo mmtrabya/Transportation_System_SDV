@@ -384,7 +384,7 @@ u8 SPI_u8GetMode(void);
  * 25LC256 EEPROM      | DIV4          | MODE0  | 4 MHz        | 32KB EEPROM
  * MCP2515 CAN         | DIV4          | MODE0  | 4 MHz        | CAN controller
  * PN532 NFC           | DIV4          | MODE0  | 4 MHz        | NFC reader
- * MPU6050 (SPI)       | DIV16         | MODE0  | 1 MHz        | IMU sensor
+ * MPU9250 (SPI)       | DIV16         | MODE0  | 1 MHz        | IMU sensor
  * BME280              | DIV4          | MODE0  | 4 MHz        | Environmental sensor
  * Nokia 5110 LCD      | DIV4          | MODE0  | 4 MHz        | PCD8544 controller
  * 

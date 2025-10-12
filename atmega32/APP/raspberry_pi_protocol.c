@@ -3,13 +3,14 @@
  * Implementation of Raspberry Pi communication protocol
  * 
  * Location: atmega32/APP/raspberry_pi_protocol.c
- * Author: Your Name
  * 
- * Integrates: GPS, IMU (MPU6050+QMC5883L), Motors (L298N), Ultrasonic sensors
+ * GPS REMOVED - Connected directly to Raspberry Pi 5
+ * Integrates: IMU (MPU9250), Motors (L298N), Ultrasonic sensors
  */
 
 #include "raspberry_pi_protocol.h"
 #include "../Application.h"
+
 /* Forward declaration */
 static void Protocol_ProcessCommand(u8 cmd, const u8* data, u8 length);
 
@@ -31,7 +32,6 @@ static u8 rx_checksum;
 
 /* ==================== SENSOR DATA STORAGE ==================== */
 
-static GPS_Data_t current_gps;
 static IMU_Data_t current_imu;
 static Ultrasonic_Data_t current_ultrasonic;
 static System_Status_t system_status;
@@ -45,22 +45,16 @@ void Protocol_Init(void) {
     // Initialize UART for Raspberry Pi communication (115200 baud)
     UART_Init();
     
-    // Initialize GPS module
-    GPS_Init();
-    
-    // Initialize I2C for IMU sensors
+    // Initialize I2C for IMU sensor
     TWI_initMaster();
     
-    // Enable MPU6050 bypass mode for magnetometer access
-    MPU6050_EnableBypassMode();
-    _delay_ms(100);
+    // Initialize MPU9250 (accelerometer + gyroscope + magnetometer)
+    MPU9250_Data_t mpu_data;
+    MPU9250_InitData(&mpu_data);
     
-    // Initialize MPU6050 (accelerometer + gyroscope)
-    MPU_Init();
-    _delay_ms(100);
-    
-    // Initialize QMC5883L (magnetometer)
-    QMC5883L_Init();
+    if (MPU9250_Init() != MPU9250_OK) {
+        system_status.errors++;
+    }
     _delay_ms(100);
     
     // Initialize motors
@@ -161,10 +155,6 @@ static void Protocol_ProcessCommand(u8 cmd, const u8* data, u8 length) {
             Protocol_SendAck();
             break;
             
-        case CMD_GPS_REQUEST:
-            Handle_GPSRequest();
-            break;
-            
         case CMD_IMU_REQUEST:
             Handle_IMURequest();
             break;
@@ -174,8 +164,6 @@ static void Protocol_ProcessCommand(u8 cmd, const u8* data, u8 length) {
             break;
             
         case CMD_ALL_SENSORS_REQUEST:
-            Handle_GPSRequest();
-            _delay_ms(10);
             Handle_IMURequest();
             _delay_ms(10);
             Handle_UltrasonicRequest();
@@ -252,10 +240,6 @@ void Protocol_SendNack(void) {
     Protocol_SendPacket(RESP_NACK, NULL, 0);
 }
 
-void Protocol_SendGPSData(const GPS_Data_t* gps) {
-    Protocol_SendPacket(RESP_GPS_DATA, (const u8*)gps, sizeof(GPS_Data_t));
-}
-
 void Protocol_SendIMUData(const IMU_Data_t* imu) {
     Protocol_SendPacket(RESP_IMU_DATA, (const u8*)imu, sizeof(IMU_Data_t));
 }
@@ -307,52 +291,30 @@ void Handle_EmergencyStop(void) {
     LED_ON(RED_LED_PIN);
 }
 
-void Handle_GPSRequest(void) {
-    // Read GPS data
-    GPSData gps_raw;
-    bool_t valid = GPS_ReadData(&gps_raw);
-    
-    // Convert to protocol format
-    current_gps.latitude = (float)gps_raw.latitude;
-    current_gps.longitude = (float)gps_raw.longitude;
-    current_gps.altitude = 0.0;  // GPS module doesn't provide altitude in this format
-    current_gps.speed = (float)gps_raw.speed;
-    current_gps.satellites = 0;  // Not available in current GPS implementation
-    current_gps.fix_quality = 0;
-    current_gps.valid = valid;
-    
-    // Send to Raspberry Pi
-    Protocol_SendGPSData(&current_gps);
-}
-
 void Handle_IMURequest(void) {
-    // Read MPU6050 (accelerometer + gyroscope)
-    MPU_Conv();
+    // Read MPU9250 (accelerometer + gyroscope + magnetometer)
+    MPU9250_Data_t mpu_data;
+    MPU9250_InitData(&mpu_data);
     
-    // Read QMC5883L (magnetometer)
-    QMC5883L_Data_t mag_data;
-    QMC5883L_Read(&mag_data);
-    
-    // Calculate heading from magnetometer
-    float heading = QMC5883L_CalculateHeading(&mag_data);
+    // Read all sensor data
+    MPU9250_ReadAll(&mpu_data);
     
     // Fill IMU data structure
-    current_imu.accel_x = AX;
-    current_imu.accel_y = AY;
-    current_imu.accel_z = AZ;
+    current_imu.accel_x = mpu_data.accel_x;
+    current_imu.accel_y = mpu_data.accel_y;
+    current_imu.accel_z = mpu_data.accel_z;
     
-    current_imu.gyro_x = GX;
-    current_imu.gyro_y = GY;
-    current_imu.gyro_z = GZ;
+    current_imu.gyro_x = mpu_data.gyro_x;
+    current_imu.gyro_y = mpu_data.gyro_y;
+    current_imu.gyro_z = mpu_data.gyro_z;
     
-    current_imu.mag_x = (float)mag_data.mag_x;
-    current_imu.mag_y = (float)mag_data.mag_y;
-    current_imu.mag_z = (float)mag_data.mag_z;
+    current_imu.mag_x = mpu_data.mag_x;
+    current_imu.mag_y = mpu_data.mag_y;
+    current_imu.mag_z = mpu_data.mag_z;
     
-    // Calculate roll and pitch from accelerometer
-    current_imu.roll = atan2(AY, AZ) * 180.0 / M_PI;
-    current_imu.pitch = atan2(-AX, sqrt(AY * AY + AZ * AZ)) * 180.0 / M_PI;
-    current_imu.yaw = heading;
+    current_imu.roll = mpu_data.roll;
+    current_imu.pitch = mpu_data.pitch;
+    current_imu.yaw = mpu_data.yaw;
     
     // Send to Raspberry Pi
     Protocol_SendIMUData(&current_imu);
@@ -397,7 +359,6 @@ void Handle_SystemStatusRequest(void) {
     system_status.battery_voltage = 12.0;  // Placeholder
     
     system_status.cpu_load = 50;  // Placeholder - can implement actual measurement
-    system_status.errors = 0;
     
     // Send to Raspberry Pi
     Protocol_SendSystemStatus(&system_status);
