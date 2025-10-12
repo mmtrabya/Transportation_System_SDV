@@ -81,7 +81,7 @@ By adopting a **Software-Defined Vehicle (SDV)** paradigm, the system enables **
   - Provides **perception data** to the ESP microcontrollers for real-time decision support.  
 
 - 🌐 **IoT Communication (V2X) Module**  
-  - Developed using **ESP32/ESP8266** boards programmed in **C/C++**.  
+  - Developed using **ESP32** boards programmed in **C/C++**.  
   - Facilitates communication between multiple SDVs using wireless protocols such as **Wi-Fi** and **ESP-NOW**.  
   - Enables **Vehicle-to-Vehicle (V2V)** and **Vehicle-to-Infrastructure (V2I)** data exchange.  
 
