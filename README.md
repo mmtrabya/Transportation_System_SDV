@@ -157,6 +157,7 @@ A cross-platform mobile app developed with Flutter for residents of Smart Cities
                  │   Tracking)                 │
                  └─────────────────────────────┘
 ```
+---
 
 | Category                       | Technologies                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -171,6 +172,7 @@ A cross-platform mobile app developed with Flutter for residents of Smart Cities
 
 
 
+---
 
 ## 💡 Project Modules  
 
@@ -199,3 +201,12 @@ A cross-platform mobile app developed with Flutter for residents of Smart Cities
   - Displays important indicators such as **speed**, **distance**, **detection confidence**, and **system health**.  
   - Runs **locally** — no internet, cloud, or database dependency.  
   - Serves as a **monitoring and analysis tool** for debugging and demonstration.  
+- 📱 Mobile App Development
+  - Developed using Flutter and Dart for cross-platform deployment (Android, iOS, Web, Windows, Linux, macOS).
+  - Designed for residents of Smart Cities to book, manage, and monitor Software-Defined Vehicles (SDVs).
+  - Features interactive UI with Lottie animations and a custom splash screen for a seamless user experience.
+  - Integrates with backend APIs for SDV availability, status tracking, and trip history visualization.
+
+---
+
+© 2025 Mohammed Tarabay — Developed as part of the Smart Transportation System (SDV) Project. All rights reserved.
