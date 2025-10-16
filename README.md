@@ -12,6 +12,82 @@
 </div>
 
 ---
+## Repo Structure
+
+```
+├── 📟 atmega32/ — Embedded C firmware for the vehicle microcontroller (sensors, actuators, and CAN communication)
+│ ├── ⚙️ APP/ — Application layer logic for Atmega32 operations
+│ ├── 📄 Application.h — Main header defining application-level functions
+│ ├── 🧮 BIT_MATH.h — Bitwise macros for register manipulation
+│ ├── 🏗️ build/ — Compiled binaries and build files
+│ ├── ⚙️ CFG/ — Configuration files (pins, ports, system setup)
+│ ├── 🔌 HAL/ — Hardware Abstraction Layer (e.g. LCD, sensors, motor drivers)
+│ ├── 💡 main.c — Main firmware entry point
+│ ├── 🧰 Makefile — Build automation script
+│ ├── 🧾 Makefile.backup — Backup of the original Makefile
+│ ├── 🔧 MCAL/ — Microcontroller Abstraction Layer (low-level drivers)
+│ ├── 🗃️ REGS.h — Register definitions
+│ ├── 🗃️ REGS.h.backup — Backup of register definitions
+│ └── 📘 STD_TYPES.h — Standard data type definitions
+
+├── 📡 esp32/ — Firmware for IoT communication and wireless control (Wi-Fi, MQTT, etc.)
+│ ├── 🗃️ backup/ — Saved or older versions of ESP32 code
+│ ├── 💾 flash.sh — Script for flashing firmware to ESP32
+│ ├── 🧩 include/ — Header files and shared definitions
+│ ├── 📚 lib/ — External libraries
+│ ├── ⚙️ platformio.ini — PlatformIO build configuration
+│ └── 🧠 src/ — Main ESP32 source code
+
+├── 🧠 models/ — AI/ML models integrated with the SDV system
+│ ├── 🛣️ Lane_Detection/ — Lane detection model and scripts
+│ └── 🚦 Traffic_Sign/ — Traffic sign recognition model and datasets
+
+├── 🍓 raspberry_pi/ — Python backend for intelligent vehicle control
+│ ├── 🧩 adas_inference.py — Real-time ADAS inference (lane & sign detection)
+│ ├── 🔗 atmega32_interface.py — Serial communication with Atmega32
+│ ├── 🛡️ automotive_cybersecurity.py — Security and data integrity checks
+│ ├── ⚙️ config.py — System configuration and constants
+│ ├── 📊 dashboards/ — Visualization dashboards
+│ ├── 👁️ driver_inference.py — Driver monitoring and analysis
+│ ├── 🔄 fota_sota_manager.py — Firmware/Software Over-The-Air update manager
+│ ├── 📡 gps_interface.py — GPS and localization module
+│ ├── ☁️ iot_publish.py — Publishes telemetry to cloud/IoT broker
+│ ├── 🧾 logs/ — System logs and runtime data
+│ ├── 🚗 main_sdv_system.py — Main controller for SDV logic
+│ ├── 🗂️ pycache/ — Compiled Python cache
+│ └── 🔊 v2x_interface.py — Vehicle-to-Everything (V2X) communication module
+
+├── 📱 sdv_application/ — Flutter app for SDV Bookin in the Smart Cities
+│ ├── ⚙️ analysis_options.yaml — Linting and style configuration
+│ ├── 🤖 android/, 🍎 ios/, 🪟 windows/, 🐧 linux/, 🌐 web/, 🍏 macos/ — Platform-specific build directories
+│ ├── 🖼️ assets/ — Icons, images, and UI resources
+│ ├── 💻 lib/ — Main Dart source code
+│ ├── 📦 pubspec.yaml — Dependency configuration
+│ ├── 📜 pubspec.lock — Dependency lock file
+│ ├── 🧪 test/ — Unit and widget tests
+│ ├── 🏗️ build/ — Compiled output files
+│ ├── 📘 README.md — App-specific documentation
+│ └── 🌐 web/ — Flutter web app build
+
+├── 🖥️ server/ — Backend and update service modules
+│ ├── 📦 updates/ — Firmware/software update packages
+│ └── 🌐 update_server.py — OTA update server for SDV devices
+
+├── 🧰 scripts/ — Utility and setup scripts
+│ └── ⚙️ install_dependencies.sh — Script for installing dependencies
+
+├── 🧪 tests/ — System and unit testing for hardware/software modules
+│ ├── 💡 blink.c / blink.elf / blink.hex — Microcontroller LED tests
+│ ├── 🔍 scan_baudrates.py — Serial port baudrate scanner
+│ ├── 🚘 test_adas.py — ADAS inference test
+│ ├── 🧩 test.elf / test.hex — Compiled test binaries
+│ ├── 📡 test_listen.py — Listener test for communication channels
+│ └── ⚙️ test_main.c — Main embedded test file
+
+├── 📜 LICENSE — License file
+└── 📖 README.md — Main project documentation
+```
+---
 
 ## 🌆 Project Overview  
 
@@ -59,10 +135,27 @@ A cross-platform mobile app developed with Flutter for residents of Smart Cities
         │                       │                       │
 ┌───────┴───────┐       ┌───────┴───────┐       ┌───────┴───────┐
 │   SDV Vehicle 1│       │   SDV Vehicle 2│       │   SDV Vehicle 3│
-│ (ADAS + IoT +  │       │ (Vision + V2V) │       │ (CyberSec + AI)│
-│  Edge Compute) │       │                 │       │                │
+│ ┌─────────────┐│       │ ┌─────────────┐│       │ ┌─────────────┐│
+│ │   ESP32     ││       │ │   ESP32     ││       │ │   ESP32     ││
+│ │   (V2X)     ││       │ │   (V2X)     ││       │ │   (V2X)     ││
+│ └─────────────┘│       │ └─────────────┘│       │ └─────────────┘│
+│ ┌─────────────┐│       │ ┌─────────────┐│       │ ┌─────────────┐│
+│ │Raspberry Pi ││       │ │Raspberry Pi ││       │ │Raspberry Pi ││
+│ │ (Edge AI)   ││       │ │ (Edge AI)   ││       │ │ (Edge AI)   ││
+│ └─────────────┘│       │ └─────────────┘│       │ └─────────────┘│
+│ ┌─────────────┐│       │ ┌─────────────┐│       │ ┌─────────────┐│
+│ │ ATmega32    ││       │ │ ATmega32    ││       │ │ ATmega32    ││
+│ │(Control)    ││       │ │(Control)    ││       │ │(Control)    ││
+│ └─────────────┘│       │ └─────────────┘│       │ └─────────────┘│
 └────────────────┘       └────────────────┘       └────────────────┘
-
+        │                       │                       │
+        └───────────────────────┼───────────────────────┘
+                                │ (V2V Communication via ESP32)
+                 ┌──────────────┴──────────────┐
+                 │   Mobile App Users          │
+                 │  (Booking & Real-time       │
+                 │   Tracking)                 │
+                 └─────────────────────────────┘
 ```
 
 | Category                       | Technologies                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
