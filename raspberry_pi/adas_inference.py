@@ -130,11 +130,27 @@ class ONNXModel:
             self.output_names = [output.name for output in self.session.get_outputs()]
             
             input_shape = self.session.get_inputs()[0].shape
-            self.input_height = input_shape[2] if len(input_shape) > 2 else 640
-            self.input_width = input_shape[3] if len(input_shape) > 3 else 640
+            
+            # Handle dynamic dimensions (strings like 'batch', 'height', 'width')
+            if len(input_shape) > 2:
+                # Try to get height from index 2
+                if isinstance(input_shape[2], int):
+                    self.input_height = input_shape[2]
+                else:
+                    self.input_height = 640  # Default for dynamic dimension
+                
+                # Try to get width from index 3
+                if len(input_shape) > 3 and isinstance(input_shape[3], int):
+                    self.input_width = input_shape[3]
+                else:
+                    self.input_width = 640  # Default for dynamic dimension
+            else:
+                self.input_height = 640
+                self.input_width = 640
             
             logger.info(f"Model loaded: {model_path}")
             logger.info(f"Input shape: {input_shape}")
+            logger.info(f"Using input size: {self.input_width}x{self.input_height}")
             
         except Exception as e:
             logger.error(f"Failed to load model {model_path}: {e}")
@@ -206,7 +222,24 @@ class LaneDetector(ONNXModel):
         lane_departure = 0.0
         
         if left_lane is not None and right_lane is not None and len(left_lane) > 0 and len(right_lane) > 0:
+            # Interpolate lanes to have same number of points
+            max_len = max(len(left_lane), len(right_lane))
+            
+            # Interpolate left lane
+            if len(left_lane) != max_len:
+                left_y = np.linspace(left_lane[0, 1], left_lane[-1, 1], max_len)
+                left_x = np.interp(left_y, left_lane[:, 1], left_lane[:, 0])
+                left_lane = np.column_stack([left_x, left_y])
+            
+            # Interpolate right lane
+            if len(right_lane) != max_len:
+                right_y = np.linspace(right_lane[0, 1], right_lane[-1, 1], max_len)
+                right_x = np.interp(right_y, right_lane[:, 1], right_lane[:, 0])
+                right_lane = np.column_stack([right_x, right_y])
+            
+            # Now calculate center with matching shapes
             lane_center = (left_lane + right_lane) / 2
+            
             image_center = original_image.shape[1] / 2
             lane_bottom_center = lane_center[-1][0] if len(lane_center) > 0 else image_center
             lane_departure = (lane_bottom_center - image_center) / image_center
@@ -237,12 +270,26 @@ class LaneDetector(ONNXModel):
         if lane is None:
             return None
         
+        # Only smooth if lane has consistent shape
+        if len(self.lane_history) > 0:
+            # Check if new lane has same shape as previous
+            if self.lane_history[-1] is not None and lane.shape != self.lane_history[-1].shape:
+                # Clear history if shape changed
+                self.lane_history = []
+        
         self.lane_history.append(lane)
         if len(self.lane_history) > self.history_size:
             self.lane_history.pop(0)
         
+        # Only average if we have multiple frames with same shape
         if len(self.lane_history) > 1:
-            return np.mean(self.lane_history, axis=0)
+            try:
+                return np.mean(self.lane_history, axis=0)
+            except ValueError:
+                # If averaging fails due to shape mismatch, clear history and return current
+                self.lane_history = [lane]
+                return lane
+        
         return lane
     
     def draw_lanes(self, image: np.ndarray, lane_result: LaneResult) -> np.ndarray:
@@ -594,10 +641,15 @@ def main():
     # - models/Lane_Detection/scnn.onnx
     
     LANE_MODEL = "models/Lane_Detection/enet_sad.onnx"  # Choose: enet.onnx, enet_sad.onnx, or scnn.onnx
-    OBJECT_MODEL = "models/yolov8n.onnx"
-    SIGN_MODEL = "models/Traffic_Sign/yolov8n.onnx"
+    OBJECT_MODEL = "models/Object_Detection/yolov8n.onnx"
+    SIGN_MODEL = "models/Traffic_Sign_Recognition/traffic_signs.onnx"
     
-    adas = AdasSystem(LANE_MODEL, OBJECT_MODEL, SIGN_MODEL, use_kinect=True)
+    adas = AdasSystem(
+        lane_model=LANE_MODEL,
+        object_model=OBJECT_MODEL,
+        sign_model=SIGN_MODEL,
+        use_kinect=True
+    )
     
     # Fallback to standard camera if Kinect not available
     if not adas.use_kinect:
