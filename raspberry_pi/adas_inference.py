@@ -74,75 +74,38 @@ class KinectCamera:
             logger.info("Falling back to standard camera...")
     
     def get_frame(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """
-        Get RGB and Depth frames from Kinect
-        
-        Returns:
-            Tuple of (rgb_frame, depth_frame)
-        """
+        """Get RGB and Depth frames from Kinect"""
         if not self.connected:
             return None, None
         
         try:
-            # Get RGB frame
             rgb_frame, _ = freenect.sync_get_video()
-            
-            # Get depth frame
             depth_frame, _ = freenect.sync_get_depth()
-            
-            # Convert RGB to BGR for OpenCV
             rgb_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
-            
             return rgb_frame, depth_frame
-            
         except Exception as e:
             logger.error(f"Error reading from Kinect: {e}")
             return None, None
     
-    def get_distance_at_point(self, depth_frame: np.ndarray, x: int, y: int) -> float:
-        """
-        Get distance (in meters) at specific pixel coordinates
-        
-        Args:
-            depth_frame: Depth frame from Kinect
-            x, y: Pixel coordinates
-        
-        Returns:
-            Distance in meters
-        """
-        if depth_frame is None or x >= depth_frame.shape[1] or y >= depth_frame.shape[0]:
-            return -1.0
-        
-        # Kinect depth is in mm, convert to meters
-        depth_mm = depth_frame[y, x]
-        return depth_mm / 1000.0
-    
     def get_bbox_distance(self, depth_frame: np.ndarray, bbox: Tuple[int, int, int, int]) -> float:
-        """
-        Calculate average distance for bounding box
-        
-        Args:
-            depth_frame: Depth frame from Kinect
-            bbox: (x1, y1, x2, y2)
-        
-        Returns:
-            Average distance in meters
-        """
+        """Calculate average distance for bounding box"""
         if depth_frame is None:
             return -1.0
         
         x1, y1, x2, y2 = bbox
+        x1 = max(0, min(x1, depth_frame.shape[1] - 1))
+        x2 = max(0, min(x2, depth_frame.shape[1] - 1))
+        y1 = max(0, min(y1, depth_frame.shape[0] - 1))
+        y2 = max(0, min(y2, depth_frame.shape[0] - 1))
         
-        # Extract region of interest
         roi = depth_frame[y1:y2, x1:x2]
+        if roi.size == 0:
+            return -1.0
         
-        # Filter out invalid depths (0 or very large)
         valid_depths = roi[(roi > 0) & (roi < 10000)]
-        
         if len(valid_depths) == 0:
             return -1.0
         
-        # Return median depth (more robust than mean)
         return np.median(valid_depths) / 1000.0
     
     def release(self):
@@ -198,7 +161,7 @@ class ONNXModel:
 # ==================== LANE DETECTION ====================
 
 class LaneDetector(ONNXModel):
-    """Lane detection using ONNX model"""
+    """Lane detection using ONNX model (ENet/ENet-SAD/SCNN)"""
     
     def __init__(self, model_path: str):
         super().__init__(model_path)
@@ -209,7 +172,6 @@ class LaneDetector(ONNXModel):
         """Postprocess lane detection output"""
         output = outputs[0]
         
-        # Handle segmentation mask output
         if len(output.shape) == 4:  # [1, C, H, W]
             lane_mask = output[0]
             
@@ -231,31 +193,25 @@ class LaneDetector(ONNXModel):
         elif len(output.shape) == 3:  # [1, num_points, 2]
             points = output[0]
             h, w = original_image.shape[:2]
-            
             points[:, 0] *= w
             points[:, 1] *= h
-            
             mid = len(points) // 2
             left_lane = points[:mid]
             right_lane = points[mid:]
-        
         else:
             logger.warning(f"Unexpected lane detection output shape: {output.shape}")
             return LaneResult(None, None, None, 0.0, 0.0)
         
-        # Calculate lane center and departure
         lane_center = None
         lane_departure = 0.0
         
         if left_lane is not None and right_lane is not None and len(left_lane) > 0 and len(right_lane) > 0:
             lane_center = (left_lane + right_lane) / 2
-            
             image_center = original_image.shape[1] / 2
             lane_bottom_center = lane_center[-1][0] if len(lane_center) > 0 else image_center
             lane_departure = (lane_bottom_center - image_center) / image_center
         
         confidence = 0.8 if left_lane is not None and right_lane is not None else 0.3
-        
         left_lane = self._smooth_lane(left_lane)
         right_lane = self._smooth_lane(right_lane)
         
@@ -264,19 +220,16 @@ class LaneDetector(ONNXModel):
     def _extract_lane_points(self, mask: np.ndarray, side: str, threshold: float = 0.5) -> np.ndarray:
         """Extract lane points from segmentation mask"""
         mask = (mask > threshold).astype(np.uint8)
-        
         if mask.sum() < 10:
             return None
         
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
         if not contours:
             return None
         
         largest_contour = max(contours, key=cv2.contourArea)
         points = largest_contour.reshape(-1, 2)
         points = points[points[:, 1].argsort()]
-        
         return points
     
     def _smooth_lane(self, lane: np.ndarray) -> np.ndarray:
@@ -290,7 +243,6 @@ class LaneDetector(ONNXModel):
         
         if len(self.lane_history) > 1:
             return np.mean(self.lane_history, axis=0)
-        
         return lane
     
     def draw_lanes(self, image: np.ndarray, lane_result: LaneResult) -> np.ndarray:
@@ -309,7 +261,6 @@ class LaneDetector(ONNXModel):
             pts = lane_result.lane_center.astype(np.int32)
             cv2.polylines(overlay, [pts], False, (255, 0, 0), 2)
         
-        # Draw lane departure indicator
         h, w = image.shape[:2]
         center_x = int(w / 2)
         departure_pixels = int(lane_result.lane_departure * w / 2)
@@ -337,12 +288,10 @@ class ObjectDetector(ONNXModel):
             'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
             'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee'
         ]
-        
-        # Pedestrian-related classes
         self.pedestrian_classes = ['person']
     
     def postprocess(self, outputs: List[np.ndarray], original_image: np.ndarray, 
-                   depth_frame: Optional[np.ndarray] = None) -> List[DetectionResult]:
+                   depth_frame: Optional[np.ndarray] = None, kinect: Optional[KinectCamera] = None) -> List[DetectionResult]:
         """Postprocess YOLOv8 output with Kinect depth"""
         output = outputs[0]
         
@@ -353,7 +302,6 @@ class ObjectDetector(ONNXModel):
         
         detections = []
         h, w = original_image.shape[:2]
-        
         scale_x = w / self.input_width
         scale_y = h / self.input_height
         
@@ -386,13 +334,10 @@ class ObjectDetector(ONNXModel):
             x2 = max(0, min(x2, w))
             y2 = max(0, min(y2, h))
             
-            # Get distance from Kinect depth if available
             distance = None
-            if depth_frame is not None:
-                from_kinect = KinectCamera()
-                distance = from_kinect.get_bbox_distance(depth_frame, (x1, y1, x2, y2))
+            if depth_frame is not None and kinect is not None:
+                distance = kinect.get_bbox_distance(depth_frame, (x1, y1, x2, y2))
             
-            # Fallback to estimation if no depth
             if distance is None or distance <= 0:
                 distance = self._estimate_distance(y2 - y1, h)
             
@@ -409,7 +354,6 @@ class ObjectDetector(ONNXModel):
             ))
         
         detections = self._apply_nms(detections)
-        
         return detections
     
     def _apply_nms(self, detections: List[DetectionResult]) -> List[DetectionResult]:
@@ -450,13 +394,11 @@ class ObjectDetector(ONNXModel):
         return [detections[i] for i in keep]
     
     def _estimate_distance(self, bbox_height: int, image_height: int) -> float:
-        """Estimate distance based on bounding box height (fallback)"""
+        """Estimate distance based on bounding box height"""
         if bbox_height == 0:
             return 100.0
-        
         focal_length = image_height * 0.5
         real_height = 1.7
-        
         distance = (real_height * focal_length) / bbox_height
         return min(distance, 100.0)
     
@@ -467,9 +409,8 @@ class ObjectDetector(ONNXModel):
         for det in detections:
             x1, y1, x2, y2 = det.bbox
             
-            # Different color for pedestrians
             if det.is_pedestrian:
-                color = (0, 0, 255)  # Red for pedestrians
+                color = (0, 0, 255)
                 thickness = 3
             else:
                 color = self._get_color(det.class_id)
@@ -529,7 +470,6 @@ class SignRecognizer(ONNXModel):
             return SignResult("No sign detected", confidence)
         
         sign_type = self.sign_classes[class_id] if class_id < len(self.sign_classes) else f"Unknown sign {class_id}"
-        
         return SignResult(sign_type, confidence)
     
     def draw_sign(self, image: np.ndarray, sign_result: SignResult) -> np.ndarray:
@@ -557,15 +497,7 @@ class AdasSystem:
     """Integrated ADAS system for road monitoring (Xbox Kinect)"""
     
     def __init__(self, lane_model: str, object_model: str, sign_model: str, use_kinect: bool = True):
-        """
-        Initialize ADAS system
-        
-        Args:
-            lane_model: Path to lane detection ONNX model
-            object_model: Path to object detection ONNX model
-            sign_model: Path to traffic sign recognition ONNX model
-            use_kinect: Use Xbox Kinect camera (True) or standard camera (False)
-        """
+        """Initialize ADAS system"""
         logger.info("Initializing ADAS System (Road Monitoring)...")
         
         self.lane_detector = LaneDetector(lane_model)
@@ -579,11 +511,13 @@ class AdasSystem:
                 logger.warning("Kinect not available, falling back to standard camera")
                 self.use_kinect = False
                 self.kinect = None
+        else:
+            self.kinect = None
         
         self.fps = 0
         self.frame_times = []
         
-        logger.info("ADAS System ready!")
+        logger.info("✓ ADAS System ready!")
     
     def get_frame(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Get frame from Kinect or standard camera"""
@@ -592,16 +526,7 @@ class AdasSystem:
         return None, None
     
     def process_frame(self, frame: np.ndarray, depth_frame: Optional[np.ndarray] = None) -> Tuple[np.ndarray, Dict]:
-        """
-        Process single frame through all ADAS modules
-        
-        Args:
-            frame: RGB frame
-            depth_frame: Optional depth frame from Kinect
-        
-        Returns:
-            Tuple of (annotated_frame, results_dict)
-        """
+        """Process single frame through all ADAS modules"""
         start_time = time.time()
         
         # Lane Detection
@@ -612,7 +537,7 @@ class AdasSystem:
         # Object & Pedestrian Detection
         obj_input = self.object_detector.preprocess(frame)
         obj_output = self.object_detector.inference(obj_input)
-        detections = self.object_detector.postprocess(obj_output, frame, depth_frame)
+        detections = self.object_detector.postprocess(obj_output, frame, depth_frame, self.kinect)
         
         # Traffic Sign Recognition
         sign_input = self.sign_recognizer.preprocess(frame)
@@ -663,9 +588,14 @@ class AdasSystem:
 def main():
     """Example usage of ADAS system with Kinect"""
     
-    LANE_MODEL = "models/lane_detection.onnx"
+    # Available lane detection models:
+    # - models/Lane_Detection/enet.onnx
+    # - models/Lane_Detection/enet_sad.onnx
+    # - models/Lane_Detection/scnn.onnx
+    
+    LANE_MODEL = "models/Lane_Detection/enet_sad.onnx"  # Choose: enet.onnx, enet_sad.onnx, or scnn.onnx
     OBJECT_MODEL = "models/yolov8n.onnx"
-    SIGN_MODEL = "models/traffic_signs.onnx"
+    SIGN_MODEL = "models/Traffic_Sign/yolov8n.onnx"
     
     adas = AdasSystem(LANE_MODEL, OBJECT_MODEL, SIGN_MODEL, use_kinect=True)
     
