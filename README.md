@@ -22,25 +22,28 @@ By adopting a **Software-Defined Vehicle (SDV)** paradigm, the system enables **
 
 ---
 
-## 🧩 Key Features  
+🧩 Key Features
 
-- 🚘 **Software-Defined Vehicle (SDV) Architecture:**  
-  Modular design allows each vehicle subsystem to be managed and updated independently via software.
+🚘 Software-Defined Vehicle (SDV) Architecture:
+Modular design allows each vehicle subsystem to be managed and updated independently via software.
 
-- 🧠 **AI-Powered ADAS (Advanced Driver Assistance System):**  
-  Real-time lane detection, obstacle recognition, and decision-making using deep learning models built in **Python** and **Jupyter Notebooks**.
+🧠 AI-Powered ADAS (Advanced Driver Assistance System):
+Real-time lane detection, obstacle recognition, and decision-making using deep learning models built in Python and Jupyter Notebooks.
 
-- 🌐 **ESP-Based IoT Communication:**  
-  Efficient **Vehicle-to-Vehicle (V2V)** and **Vehicle-to-Infrastructure (V2I)** communication using **ESP32** modules programmed in **C/C++**.
+🌐 ESP-Based IoT Communication:
+Efficient Vehicle-to-Vehicle (V2V) and Vehicle-to-Infrastructure (V2I) communication using ESP32 modules programmed in C/C++.
 
-- ☁️ **Modular FOTA/SOTA Update Mechanism:**  
-  Supports local **Firmware Over-The-Air** and **Software Over-The-Air** updates for ESP-based microcontrollers and onboard software.
+☁️ Modular FOTA/SOTA Update Mechanism:
+Supports local Firmware Over-The-Air and Software Over-The-Air updates for ESP-based microcontrollers and onboard software.
 
-- 🔐 **Automotive Cybersecurity Layer:**  
-  Incorporates encryption and authentication mechanisms to ensure data integrity and prevent unauthorized access.
+🔐 Automotive Cybersecurity Layer:
+Incorporates encryption and authentication mechanisms to ensure data integrity and prevent unauthorized access.
 
-- 📊 **Local Streamlit Dashboard:**  
-  Real-time visualization and monitoring of vehicle telemetry, AI model outputs, and system status.
+📊 Local Streamlit Dashboard:
+Real-time visualization and monitoring of vehicle telemetry, AI model outputs, and system status.
+
+📱 Flutter-Based Mobile Application:
+A cross-platform mobile app developed with Flutter for residents of Smart Cities to book and manage Software-Defined Vehicles (SDVs), track availability, and monitor trip details.
 
 ---
 
@@ -62,14 +65,17 @@ By adopting a **Software-Defined Vehicle (SDV)** paradigm, the system enables **
 
 ```
 
-| Category                       | Technologies                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Programming Languages**      | ![C](https://img.shields.io/badge/C-00599C?logo=c&logoColor=white) ![C++](https://img.shields.io/badge/C++-00599C?logo=cplusplus&logoColor=white) ![Python](https://img.shields.io/badge/Python-3670A0?logo=python&logoColor=ffdd54)                                                                                                           |
-| **Development Environment**    | ![Jupyter](https://img.shields.io/badge/Jupyter-FA0F00?logo=jupyter&logoColor=white)                                                                                                                                                                                                                                                          |
-| **AI & ML Frameworks**         | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white) ![OpenCV](https://img.shields.io/badge/OpenCV-27338e?logo=opencv&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLO-00FFFF?logo=yolo&logoColor=black)                                                                                           |
-| **Embedded Systems & IoT**     | ![ESP32](https://img.shields.io/badge/ESP32-000000?logo=espressif&logoColor=white) ![ATmega32A](https://img.shields.io/badge/ATmega32A-00205B?logo=atmel&logoColor=white)                                                                                                                                                                     |
-| **Visualization & Monitoring** | ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)                                                                                                                                                                                                                                                    |
-| **Version Control**            | ![Git](https://img.shields.io/badge/Git-F05032?logo=git&logoColor=white) ![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)                                                                                                                                                                                   |
+| Category                       | Technologies                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Programming Languages**      | ![C](https://img.shields.io/badge/C-00599C?logo=c\&logoColor=white) ![C++](https://img.shields.io/badge/C++-00599C?logo=cplusplus\&logoColor=white) ![Python](https://img.shields.io/badge/Python-3670A0?logo=python\&logoColor=ffdd54) ![Dart](https://img.shields.io/badge/Dart-0175C2?logo=dart\&logoColor=white)                                                                                                                                                |
+| **Development Environment**    | ![Jupyter](https://img.shields.io/badge/Jupyter-FA0F00?logo=jupyter\&logoColor=white) ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter\&logoColor=white)                                                                                                                                                                                                                                                                                         |
+| **AI & ML Frameworks**         | ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch\&logoColor=white) ![OpenCV](https://img.shields.io/badge/OpenCV-27338e?logo=opencv\&logoColor=white) ![YOLO](https://img.shields.io/badge/YOLO-00FFFF?logo=yolo\&logoColor=black)                                                                                                                                                                                                               |
+| **Embedded Systems & IoT**     | ![ESP32](https://img.shields.io/badge/ESP32-000000?logo=espressif\&logoColor=white) ![ATmega32A](https://img.shields.io/badge/ATmega32A-00205B?logo=atmel\&logoColor=white) ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-A22846?logo=raspberrypi\&logoColor=white)                                                                                                                                                                                   |
+| **Visualization & Monitoring** | ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit\&logoColor=white)                                                                                                                                                                                                                                                                                                                                                                         |
+| **Version Control**            | ![Git](https://img.shields.io/badge/Git-F05032?logo=git\&logoColor=white) ![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github\&logoColor=white)                                                                                                                                                                                                                                                                                                        |
+| **Mobile App Development**     | ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter\&logoColor=white) ![Dart](https://img.shields.io/badge/Dart-0175C2?logo=dart\&logoColor=white) ![LottieFiles](https://img.shields.io/badge/LottieFiles-00D9A3?logo=lottie\&logoColor=white) ![SplashScreen](https://img.shields.io/badge/Splash%20Screen-FFD700?logo=flutter\&logoColor=black)                                                                                                  |
+| **Supported Platforms**        | ![Android](https://img.shields.io/badge/Android-3DDC84?logo=android\&logoColor=white) ![iOS](https://img.shields.io/badge/iOS-000000?logo=apple\&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows\&logoColor=white) ![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux\&logoColor=black) ![macOS](https://img.shields.io/badge/macOS-000000?logo=apple\&logoColor=white) ![Web](https://img.shields.io/badge/Web-42) |
+
 
 
 
