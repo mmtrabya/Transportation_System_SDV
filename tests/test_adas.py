@@ -73,7 +73,7 @@ def main():
     # Model paths
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
-    LANE_MODEL = os.path.join(project_root, "models", "Lane_Detection", "lane.onnx")
+    LANE_MODEL = os.path.join(project_root, "models", "Lane_Detection", "enet_sad.onnx")
     OBJECT_MODEL = os.path.join(project_root, "models", "Object_Detection", "yolov8n.onnx")
     SIGN_MODEL = os.path.join(project_root, "models", "Traffic_Sign", "yolov8n.onnx")
     
