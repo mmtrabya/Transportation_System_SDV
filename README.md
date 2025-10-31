@@ -15,7 +15,7 @@
 ## Repo Structure
 
 ```
-├── 📟 atmega32/ — Embedded C firmware for the vehicle microcontroller (sensors, actuators, and CAN communication)
+├── 📟 atmega32/ — Embedded C firmware for the vehicle microcontroller
 │ ├── ⚙️ APP/ — Application layer logic for Atmega32 operations
 │ ├── 📄 Application.h — Main header defining application-level functions
 │ ├── 🧮 BIT_MATH.h — Bitwise macros for register manipulation
@@ -30,7 +30,7 @@
 │ ├── 🗃️ REGS.h.backup — Backup of register definitions
 │ └── 📘 STD_TYPES.h — Standard data type definitions
 
-├── 📡 esp32/ — Firmware for IoT communication and wireless control (Wi-Fi, MQTT, etc.)
+├── 📡 esp32/ — Firmware for IoT communication and wireless control
 │ ├── 🗃️ backup/ — Saved or older versions of ESP32 code
 │ ├── 💾 flash.sh — Script for flashing firmware to ESP32
 │ ├── 🧩 include/ — Header files and shared definitions
