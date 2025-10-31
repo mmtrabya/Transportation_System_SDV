@@ -38,6 +38,7 @@ class LaneResult:
     lane_center: Optional[np.ndarray]
     lane_departure: float  # -1 to 1, 0 = centered
     confidence: float
+    segmentation_mask: Optional[np.ndarray] = None  # For visualization
 
 @dataclass
 class SignResult:
@@ -183,28 +184,38 @@ class LaneDetector(ONNXModel):
         super().__init__(model_path)
         self.lane_history = []
         self.history_size = 5
+        # Color map for lane classes (similar to 'jet' colormap)
+        self.lane_colors = [
+            (0, 0, 0),       # 0: Background
+            (255, 0, 0),     # 1: Lane 1 (Blue in BGR)
+            (0, 255, 0),     # 2: Lane 2 (Green)
+            (0, 255, 255),   # 3: Lane 3 (Yellow)
+            (0, 0, 255),     # 4: Lane 4 (Red)
+            (255, 0, 255),   # 5: Lane 5 (Magenta)
+            (255, 255, 0),   # 6: Lane 6 (Cyan)
+            (255, 255, 255)  # 7: Lane 7 (White)
+        ]
     
     def postprocess(self, outputs: List[np.ndarray], original_image: np.ndarray) -> LaneResult:
         """Postprocess lane detection output"""
         output = outputs[0]
         
+        # Get segmentation mask
         if len(output.shape) == 4:  # [1, C, H, W]
-            lane_mask = output[0]
+            # Get class predictions (argmax across channel dimension)
+            seg_mask = np.argmax(output[0], axis=0)
             
-            if lane_mask.shape[0] > 2:
-                left_mask = lane_mask[1]
-                right_mask = lane_mask[2]
-            else:
-                combined_mask = lane_mask[0] if lane_mask.shape[0] == 1 else lane_mask.max(axis=0)
-                left_mask = combined_mask.copy()
-                right_mask = combined_mask.copy()
-            
+            # Resize to original image size
             h, w = original_image.shape[:2]
-            left_mask = cv2.resize(left_mask, (w, h))
-            right_mask = cv2.resize(right_mask, (w, h))
+            seg_mask = cv2.resize(seg_mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST)
             
-            left_lane = self._extract_lane_points(left_mask, side='left')
-            right_lane = self._extract_lane_points(right_mask, side='right')
+            # === DEBUGGING LINE ===
+            # Check what the model is actually detecting. If this prints "[0]", the model isn't finding any lanes.
+            logger.info(f"Lane mask unique values: {np.unique(seg_mask)}")
+            
+            # Extract lane points from segmentation
+            left_lane = self._extract_lane_from_mask(seg_mask, side='left')
+            right_lane = self._extract_lane_from_mask(seg_mask, side='right')
             
         elif len(output.shape) == 3:  # [1, num_points, 2]
             points = output[0]
@@ -214,9 +225,10 @@ class LaneDetector(ONNXModel):
             mid = len(points) // 2
             left_lane = points[:mid]
             right_lane = points[mid:]
+            seg_mask = None
         else:
             logger.warning(f"Unexpected lane detection output shape: {output.shape}")
-            return LaneResult(None, None, None, 0.0, 0.0)
+            return LaneResult(None, None, None, 0.0, 0.0, None)
         
         lane_center = None
         lane_departure = 0.0
@@ -248,22 +260,42 @@ class LaneDetector(ONNXModel):
         left_lane = self._smooth_lane(left_lane)
         right_lane = self._smooth_lane(right_lane)
         
-        return LaneResult(left_lane, right_lane, lane_center, lane_departure, confidence)
+        return LaneResult(left_lane, right_lane, lane_center, lane_departure, confidence, seg_mask)
     
-    def _extract_lane_points(self, mask: np.ndarray, side: str, threshold: float = 0.5) -> np.ndarray:
+    def _extract_lane_from_mask(self, mask: np.ndarray, side: str) -> Optional[np.ndarray]:
         """Extract lane points from segmentation mask"""
-        mask = (mask > threshold).astype(np.uint8)
-        if mask.sum() < 10:
+        h, w = mask.shape
+        
+        # Get all lane pixels (non-background)
+        lane_pixels = np.where(mask > 0)
+        if len(lane_pixels[0]) == 0:
             return None
         
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
+        # Split into left and right based on image center
+        center_x = w // 2
+        
+        if side == 'left':
+            valid_mask = lane_pixels[1] < center_x
+        else:
+            valid_mask = lane_pixels[1] >= center_x
+        
+        if not np.any(valid_mask):
             return None
         
-        largest_contour = max(contours, key=cv2.contourArea)
-        points = largest_contour.reshape(-1, 2)
-        points = points[points[:, 1].argsort()]
-        return points
+        y_coords = lane_pixels[0][valid_mask]
+        x_coords = lane_pixels[1][valid_mask]
+        
+        if len(y_coords) < 10:
+            return None
+        
+        # Group by y-coordinate and take median x for each y
+        unique_y = np.unique(y_coords)
+        points = []
+        for y in unique_y:
+            x_values = x_coords[y_coords == y]
+            points.append([np.median(x_values), y])
+        
+        return np.array(points)
     
     def _smooth_lane(self, lane: np.ndarray) -> np.ndarray:
         """Smooth lane using temporal history"""
@@ -293,21 +325,37 @@ class LaneDetector(ONNXModel):
         return lane
     
     def draw_lanes(self, image: np.ndarray, lane_result: LaneResult) -> np.ndarray:
-        """Draw detected lanes on image"""
+        """Draw detected lanes on image with segmentation overlay"""
         overlay = image.copy()
         
+        # Draw segmentation mask as colored overlay (similar to plt.imshow with jet colormap and alpha)
+        if lane_result.segmentation_mask is not None:
+            colored_mask = np.zeros_like(image)
+            for class_id in range(1, 8):  # Lane classes 1-7
+                mask = lane_result.segmentation_mask == class_id
+                if class_id < len(self.lane_colors):
+                    colored_mask[mask] = self.lane_colors[class_id]
+            
+            # Blend with original image (alpha=0.3)
+            overlay = cv2.addWeighted(overlay, 1.0, colored_mask, 0.3, 0)
+        
+        # Draw lane points as circles (like ground truth visualization)
         if lane_result.left_lane is not None:
             pts = lane_result.left_lane.astype(np.int32)
-            cv2.polylines(overlay, [pts], False, (0, 255, 0), 3)
+            for pt in pts:
+                cv2.circle(overlay, tuple(pt), radius=3, color=(0, 255, 0), thickness=-1)
         
         if lane_result.right_lane is not None:
             pts = lane_result.right_lane.astype(np.int32)
-            cv2.polylines(overlay, [pts], False, (0, 255, 0), 3)
+            for pt in pts:
+                cv2.circle(overlay, tuple(pt), radius=3, color=(0, 255, 0), thickness=-1)
         
+        # Draw lane center line
         if lane_result.lane_center is not None:
             pts = lane_result.lane_center.astype(np.int32)
-            cv2.polylines(overlay, [pts], False, (255, 0, 0), 2)
+            cv2.polylines(overlay, [pts], False, (255, 255, 0), 2)
         
+        # Draw lane departure indicator
         h, w = image.shape[:2]
         center_x = int(w / 2)
         departure_pixels = int(lane_result.lane_departure * w / 2)
@@ -324,17 +372,20 @@ class LaneDetector(ONNXModel):
 class ObjectDetector(ONNXModel):
     """Object and pedestrian detection using YOLOv8"""
     
-    def __init__(self, model_path: str, class_names: List[str] = None, conf_threshold: float = 0.5):
+    def __init__(self, model_path: str, class_names: Dict[int, str] = None, conf_threshold: float = 0.5):
         super().__init__(model_path)
         self.conf_threshold = conf_threshold
         self.iou_threshold = 0.45
         
-        self.class_names = class_names or [
-            'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck',
-            'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
-            'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
-            'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee'
-        ]
+        # Updated class names for ADAS
+        self.class_names = class_names or {
+            1: 'car',
+            2: 'truck', 
+            3: 'person',
+            4: 'bicycle',
+            5: 'traffic light'
+        }
+        
         self.pedestrian_classes = ['person']
     
     def postprocess(self, outputs: List[np.ndarray], original_image: np.ndarray, 
@@ -342,35 +393,60 @@ class ObjectDetector(ONNXModel):
         """Postprocess YOLOv8 output with Kinect depth"""
         output = outputs[0]
         
-        if output.shape[1] == 84 or output.shape[1] > 100:
-            output = output[0].T
-        else:
-            output = output[0]
+        # === NEW CRITICAL FIX: Correct Transpose Logic ===
+        # The model output shape can be [1, 84, 8400] OR [1, 8400, 84].
+        # (Where 84 = 4 bbox coords + 80 class scores)
+        # We need to make sure we are looping over the 8400 detections.
         
+        # logger.info(f"Raw output shape: {output.shape}") # Uncomment for deep debugging
+        
+        # If shape is [1, 84, 8400], transpose it to [1, 8400, 84]
+        if output.shape[1] < output.shape[2]:
+            output = output.transpose(0, 2, 1)
+
+        # Now, output shape is [1, 8400, 84] (or similar)
+        output = output[0] # Get the [8400, 84] array of detections
+        
+        # === DEBUGGING: Log the final processed shape ===
+        # This should print something like (8400, 84) for yolov8n
+        # and (8400, 47) for your sign model (43 classes + 4 bbox)
+        logger.info(f"Processed output shape for looping: {output.shape}")
+
         detections = []
         h, w = original_image.shape[:2]
         scale_x = w / self.input_width
         scale_y = h / self.input_height
         
+        # Get the number of attributes (e.g., 84)
+        num_attrs = output.shape[1]
+        
         for detection in output:
+            
+            # === Correct Confidence Check (from last time) ===
             x_center, y_center, width, height = detection[:4]
             
-            if len(detection) > 5:
-                confidence = detection[4]
-                class_scores = detection[5:]
-            else:
-                class_scores = detection[4:]
-                confidence = class_scores.max()
+            # Get all class scores (from index 4 to the end)
+            class_scores = detection[4:num_attrs]
             
+            # Find the highest score and its class ID
+            class_id = int(class_scores.argmax())
+            confidence = class_scores[class_id]
+            
+            # Check if the highest score is above our threshold
             if confidence < self.conf_threshold:
                 continue
             
-            class_id = int(class_scores.argmax())
-            class_conf = class_scores[class_id]
+            class_conf = confidence 
+            # === END Correct Confidence Check ===
             
-            if class_conf < self.conf_threshold:
+            # Filter to only ADAS-relevant classes
+            if class_id not in self.class_names:
+                # This will filter out classes like 'oven' or 'chair'
+                # but should KEEP 'person' (ID 0) for the object_detector
+                # and 'Stop' (ID 14) for the sign_detector.
                 continue
             
+            # Bounding box calculation
             x1 = int((x_center - width / 2) * scale_x)
             y1 = int((y_center - height / 2) * scale_y)
             x2 = int((x_center + width / 2) * scale_x)
@@ -388,7 +464,7 @@ class ObjectDetector(ONNXModel):
             if distance is None or distance <= 0:
                 distance = self._estimate_distance(y2 - y1, h)
             
-            class_name = self.class_names[class_id] if class_id < len(self.class_names) else f"class_{class_id}"
+            class_name = self.class_names[class_id]
             is_pedestrian = class_name in self.pedestrian_classes
             
             detections.append(DetectionResult(
@@ -400,10 +476,13 @@ class ObjectDetector(ONNXModel):
                 is_pedestrian=is_pedestrian
             ))
         
-        detections = self._apply_nms(detections)
+        detections = self.apply_nms(detections) # Changed to self.apply_nms
         return detections
-    
-    def _apply_nms(self, detections: List[DetectionResult]) -> List[DetectionResult]:
+
+    # I also see you called _apply_nms but it's not a static method.
+    # It should be called with `self.`
+    # Make sure this method is named 'apply_nms'
+    def apply_nms(self, detections: List[DetectionResult]) -> List[DetectionResult]:
         """Apply Non-Maximum Suppression"""
         if len(detections) == 0:
             return []
@@ -485,26 +564,27 @@ class ObjectDetector(ONNXModel):
 class SignRecognizer(ONNXModel):
     """Traffic sign recognition using ONNX model"""
     
-    def __init__(self, model_path: str, sign_classes: List[str] = None, conf_threshold: float = 0.7):
+    def __init__(self, model_path: str, sign_classes: Dict[int, str] = None, conf_threshold: float = 0.7):
         super().__init__(model_path)
         self.conf_threshold = conf_threshold
         
-        self.sign_classes = sign_classes or [
-            'Speed limit (20km/h)', 'Speed limit (30km/h)', 'Speed limit (50km/h)',
-            'Speed limit (60km/h)', 'Speed limit (70km/h)', 'Speed limit (80km/h)',
-            'End of speed limit (80km/h)', 'Speed limit (100km/h)', 'Speed limit (120km/h)',
-            'No passing', 'No passing for vehicles over 3.5 metric tons',
-            'Right-of-way at the next intersection', 'Priority road', 'Yield', 'Stop',
-            'No vehicles', 'Vehicles over 3.5 metric tons prohibited', 'No entry',
-            'General caution', 'Dangerous curve to the left', 'Dangerous curve to the right',
-            'Double curve', 'Bumpy road', 'Slippery road', 'Road narrows on the right',
-            'Road work', 'Traffic signals', 'Pedestrians', 'Children crossing',
-            'Bicycles crossing', 'Beware of ice/snow', 'Wild animals crossing',
-            'End of all speed and passing limits', 'Turn right ahead', 'Turn left ahead',
-            'Ahead only', 'Go straight or right', 'Go straight or left', 'Keep right',
-            'Keep left', 'Roundabout mandatory', 'End of no passing',
-            'End of no passing by vehicles over 3.5 metric tons'
-        ]
+        # Correct GTSRB labels
+        self.sign_classes = sign_classes or {
+            0: 'Speed limit (20km/h)', 1: 'Speed limit (30km/h)', 2: 'Speed limit (50km/h)', 
+            3: 'Speed limit (60km/h)', 4: 'Speed limit (70km/h)', 5: 'Speed limit (80km/h)', 
+            6: 'End of speed limit (80km/h)', 7: 'Speed limit (100km/h)', 8: 'Speed limit (120km/h)', 
+            9: 'No passing', 10: 'No passing veh over 3.5 tons', 11: 'Right-of-way at intersection', 
+            12: 'Priority road', 13: 'Yield', 14: 'Stop', 15: 'No vehicles', 
+            16: 'Veh > 3.5 tons prohibited', 17: 'No entry', 18: 'General caution', 
+            19: 'Dangerous curve left', 20: 'Dangerous curve right', 21: 'Double curve', 
+            22: 'Bumpy road', 23: 'Slippery road', 24: 'Road narrows on the right', 
+            25: 'Road work', 26: 'Traffic signals', 27: 'Pedestrians', 28: 'Children crossing', 
+            29: 'Bicycles crossing', 30: 'Beware of ice/snow', 31: 'Wild animals crossing', 
+            32: 'End speed + passing limits', 33: 'Turn right ahead', 34: 'Turn left ahead', 
+            35: 'Ahead only', 36: 'Go straight or right', 37: 'Go straight or left', 
+            38: 'Keep right', 39: 'Keep left', 40: 'Roundabout mandatory', 
+            41: 'End of no passing', 42: 'End no passing veh > 3.5 tons'
+        }
     
     def postprocess(self, outputs: List[np.ndarray], original_image: np.ndarray) -> SignResult:
         """Postprocess traffic sign classification output"""
@@ -516,7 +596,7 @@ class SignRecognizer(ONNXModel):
         if confidence < self.conf_threshold:
             return SignResult("No sign detected", confidence)
         
-        sign_type = self.sign_classes[class_id] if class_id < len(self.sign_classes) else f"Unknown sign {class_id}"
+        sign_type = self.sign_classes.get(class_id, f"Unknown sign {class_id}")
         return SignResult(sign_type, confidence)
     
     def draw_sign(self, image: np.ndarray, sign_result: SignResult) -> np.ndarray:
@@ -539,6 +619,8 @@ class SignRecognizer(ONNXModel):
         return overlay
 
 # ==================== INTEGRATED ADAS SYSTEM ====================
+# (This part is not used by test_full_adas.py but is left here
+# if you need it for other scripts)
 
 class AdasSystem:
     """Integrated ADAS system for road monitoring (Xbox Kinect)"""
@@ -631,18 +713,13 @@ class AdasSystem:
             self.kinect.release()
 
 # ==================== EXAMPLE USAGE ====================
-
+# (This main function is not called by test_full_adas.py)
 def main():
     """Example usage of ADAS system with Kinect"""
     
-    # Available lane detection models:
-    # - models/Lane_Detection/enet.onnx
-    # - models/Lane_Detection/enet_sad.onnx
-    # - models/Lane_Detection/scnn.onnx
-    
-    LANE_MODEL = "models/Lane_Detection/enet_sad.onnx"  # Choose: enet.onnx, enet_sad.onnx, or scnn.onnx
+    LANE_MODEL = "models/Lane_Detection/enet_sad.onnx"
     OBJECT_MODEL = "models/Object_Detection/yolov8n.onnx"
-    SIGN_MODEL = "models/Traffic_Sign_Recognition/traffic_signs.onnx"
+    SIGN_MODEL = "models/Traffic_Sign/last.onnx"
     
     adas = AdasSystem(
         lane_model=LANE_MODEL,
