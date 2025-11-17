@@ -6,11 +6,16 @@
 #include <mbedtls/sha256.h>
 
 // ==================== CONFIGURATION ====================
-#define WIFI_SSID "YourWiFiSSID"
-#define WIFI_PASSWORD "YourPassword"
-#define MQTT_SERVER "your-mqtt-broker.com"
+#define WIFI_SSID "Tarabay madinaty"
+#define WIFI_PASSWORD "Tarabay_2379"
+#define MQTT_SERVER "b37.mqtt.one"
 #define MQTT_PORT 1883
-#define VEHICLE_ID "SDV_001"
+#define MQTT_USER "7ajsuv9561"
+#define MQTT_PASSWORD "169cflptvw"
+#define VEHICLE_ID "SDV002"
+
+// MQTT Topic - Single topic for all messages
+#define MQTT_TOPIC "7ajsuv9561/SDV"
 
 // Message types
 #define MSG_BSM 0x01          // Basic Safety Message
@@ -115,6 +120,8 @@ struct Stats {
   uint32_t hazardReceived = 0;
   uint32_t emergencyReceived = 0;
   uint32_t packetsDropped = 0;
+  uint32_t mqttPublished = 0;
+  uint32_t mqttReceived = 0;
 } stats;
 
 // Timing
@@ -141,6 +148,7 @@ void processReceivedBSM(BSMMessage* msg);
 void processReceivedHazard(HazardMessage* msg);
 void processReceivedEmergency(EmergencyMessage* msg);
 void sendV2IData();
+void publishBSMToMQTT(BSMMessage* msg);
 void updateVehicleState();
 void cleanupOldVehicles();
 uint16_t calculateChecksum(uint8_t* data, size_t len);
@@ -154,6 +162,8 @@ void sendStatsToRaspberryPi();
 void setup() {
   Serial.begin(115200);
   Serial.println("\n=== ESP32 V2X Communication System ===");
+  Serial.print("Vehicle ID: ");
+  Serial.println(VEHICLE_ID);
   
   // Setup WiFi and MQTT for V2I
   setupWiFi();
@@ -234,6 +244,7 @@ void setupWiFi() {
 void setupMQTT() {
   mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  mqttClient.setBufferSize(1024); // Increase buffer for larger messages
   
   reconnectMQTT();
 }
@@ -241,41 +252,65 @@ void setupMQTT() {
 void reconnectMQTT() {
   if (WiFi.status() != WL_CONNECTED) return;
   
-  while (!mqttClient.connected()) {
-    Serial.print("Connecting to MQTT...");
+  int attempts = 0;
+  while (!mqttClient.connected() && attempts < 3) {
+    Serial.print("Connecting to MQTT broker at ");
+    Serial.print(MQTT_SERVER);
+    Serial.print("...");
     
-    String clientId = "ESP32_" + String(VEHICLE_ID);
-    if (mqttClient.connect(clientId.c_str())) {
+    String clientId = "ESP32" + String(VEHICLE_ID);
+    
+    // Connect with username and password
+    if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
       Serial.println("Connected!");
+      Serial.print("Client ID: ");
+      Serial.println(clientId);
       
-      // Subscribe to V2I topics
-      mqttClient.subscribe("v2x/signals/#");
-      mqttClient.subscribe("v2x/infrastructure/#");
-      mqttClient.subscribe("v2x/emergency/#");
+      // Subscribe to single topic
+      mqttClient.subscribe(MQTT_TOPIC);
+      
+      Serial.print("Subscribed to: ");
+      Serial.println(MQTT_TOPIC);
+      
     } else {
       Serial.print("Failed, rc=");
-      Serial.println(mqttClient.state());
+      Serial.print(mqttClient.state());
+      Serial.println(" retrying...");
       delay(2000);
+      attempts++;
     }
   }
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("MQTT message [");
+  Serial.print("MQTT RX [");
   Serial.print(topic);
-  Serial.println("]");
+  Serial.print("] ");
+  Serial.print(length);
+  Serial.println("B");
+  
+  stats.mqttReceived++;
   
   // Parse JSON message
   StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, payload, length);
   
   if (error) {
-    Serial.println("JSON parse error");
+    Serial.print("JSON parse error: ");
+    Serial.println(error.c_str());
     return;
   }
   
-  // Handle traffic signal messages
-  if (strstr(topic, "signals")) {
+  // Check message type field
+  const char* msgType = doc["type"];
+  
+  if (msgType == NULL) {
+    Serial.println("No message type");
+    return;
+  }
+  
+  // Handle different message types
+  if (strcmp(msgType, "signal") == 0) {
     const char* intersectionId = doc["intersection_id"];
     uint8_t currentPhase = doc["current_phase"];
     uint16_t timeRemaining = doc["time_remaining"];
@@ -288,10 +323,67 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.print(",");
     Serial.println(timeRemaining);
   }
+  else if (strcmp(msgType, "emergency") == 0) {
+    const char* vehicleId = doc["vehicle_id"];
+    uint8_t emergencyType = doc["emergency_type"];
+    float lat = doc["latitude"];
+    float lon = doc["longitude"];
+    
+    Serial.print("INFRA_EMERGENCY:");
+    Serial.print(vehicleId);
+    Serial.print(",");
+    Serial.print(emergencyType);
+    Serial.print(",");
+    Serial.print(lat, 6);
+    Serial.print(",");
+    Serial.println(lon, 6);
+  }
+  else if (strcmp(msgType, "bsm") == 0) {
+    const char* vehicleId = doc["vehicle_id"];
+    float lat = doc["latitude"];
+    float lon = doc["longitude"];
+    float speed = doc["speed"];
+    
+    Serial.print("MQTT_BSM:");
+    Serial.print(vehicleId);
+    Serial.print(",");
+    Serial.print(lat, 6);
+    Serial.print(",");
+    Serial.print(lon, 6);
+    Serial.print(",");
+    Serial.println(speed);
+  }
+  else if (strcmp(msgType, "hazard") == 0) {
+    const char* vehicleId = doc["vehicle_id"];
+    uint8_t hazardType = doc["hazard_type"];
+    float lat = doc["latitude"];
+    float lon = doc["longitude"];
+    const char* description = doc["description"];
+    
+    Serial.print("MQTT_HAZARD:");
+    Serial.print(vehicleId);
+    Serial.print(",");
+    Serial.print(hazardType);
+    Serial.print(",");
+    Serial.print(lat, 6);
+    Serial.print(",");
+    Serial.print(lon, 6);
+    Serial.print(",");
+    Serial.println(description);
+  }
 }
 
 // ==================== ESP-NOW SETUP ====================
 void setupESPNow() {
+  // Get current WiFi channel
+  uint8_t wifiChannel = 1;
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiChannel = WiFi.channel();
+  }
+  
+  Serial.print("WiFi Channel: ");
+  Serial.println(wifiChannel);
+  
   // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW init failed!");
@@ -304,16 +396,19 @@ void setupESPNow() {
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataReceived);
   
-  // Add broadcast peer
+  // Add broadcast peer with WiFi channel
   esp_now_peer_info_t peerInfo = {};
   memset(&peerInfo, 0, sizeof(peerInfo));
   uint8_t broadcastAddr[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   memcpy(peerInfo.peer_addr, broadcastAddr, 6);
-  peerInfo.channel = V2V_CHANNEL;
+  peerInfo.channel = wifiChannel;  // Use WiFi channel
   peerInfo.encrypt = false;
   
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
     Serial.println("Failed to add broadcast peer");
+  } else {
+    Serial.print("Broadcast peer added on channel: ");
+    Serial.println(wifiChannel);
   }
 }
 
@@ -325,18 +420,42 @@ void onDataSent(const uint8_t *mac, esp_now_send_status_t status) {
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *data, int len) {
-  if (len < 1) return;
+  Serial.print("RX:");
+  Serial.print(len);
+  Serial.print("B from ");
+  for(int i=0; i<6; i++) {
+    Serial.printf("%02X", mac[i]);
+    if(i<5) Serial.print(":");
+  }
+
+  if (len < 1) {
+    Serial.println(" TOO SHORT");
+    return;
+  }
   
   uint8_t msgType = data[0];
+  Serial.print(" Type:");
+  Serial.println(msgType, HEX);
   
   switch (msgType) {
     case MSG_BSM:
       if (len == sizeof(BSMMessage)) {
         BSMMessage* bsm = (BSMMessage*)data;
-        if (verifyChecksum((uint8_t*)bsm, sizeof(BSMMessage) - 2, bsm->checksum)) {
+        
+        // FIXED: Calculate checksum excluding BOTH checksum (2 bytes) and signature (32 bytes)
+        if (verifyChecksum((uint8_t*)bsm, sizeof(BSMMessage) - 34, bsm->checksum)) {
           processReceivedBSM(bsm);
           stats.bsmReceived++;
+          publishBSMToMQTT(bsm);
+          Serial.println("  BSM OK");
+        } else {
+          Serial.println("  Checksum FAIL");
         }
+      } else {
+        Serial.print("  Size mismatch: ");
+        Serial.print(len);
+        Serial.print(" vs ");
+        Serial.println(sizeof(BSMMessage));
       }
       break;
       
@@ -346,6 +465,7 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len) {
         if (verifyChecksum((uint8_t*)hazard, sizeof(HazardMessage) - 2, hazard->checksum)) {
           processReceivedHazard(hazard);
           stats.hazardReceived++;
+          Serial.println("  Hazard OK");
         }
       }
       break;
@@ -356,8 +476,14 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len) {
         if (verifyChecksum((uint8_t*)emergency, sizeof(EmergencyMessage) - 2, emergency->checksum)) {
           processReceivedEmergency(emergency);
           stats.emergencyReceived++;
+          Serial.println("  Emergency OK");
         }
       }
+      break;
+      
+    default:
+      Serial.print("  Unknown type: ");
+      Serial.println(msgType, HEX);
       break;
   }
 }
@@ -365,6 +491,8 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len) {
 // ==================== SEND MESSAGES ====================
 void sendBSM() {
   BSMMessage bsm;
+  memset(&bsm, 0, sizeof(BSMMessage)); // Zero out first
+  
   bsm.msgType = MSG_BSM;
   strncpy(bsm.vehicleId, VEHICLE_ID, 16);
   bsm.timestamp = millis();
@@ -376,21 +504,25 @@ void sendBSM() {
   bsm.acceleration = vehicleState.acceleration;
   bsm.brakingStatus = vehicleState.brakingStatus;
   
-  // Calculate checksum
-  bsm.checksum = calculateChecksum((uint8_t*)&bsm, sizeof(BSMMessage) - 2);
-  
-  // Generate signature (simplified)
+  // FIXED: Calculate checksum excluding checksum field (2 bytes) and signature (32 bytes)
+  bsm.checksum = calculateChecksum((uint8_t*)&bsm, sizeof(BSMMessage) - 34);
   generateSignature((uint8_t*)&bsm, sizeof(BSMMessage) - 34, bsm.signature);
   
-  // Broadcast via ESP-NOW
   uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  esp_now_send(broadcastAddress, (uint8_t*)&bsm, sizeof(BSMMessage));
+  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&bsm, sizeof(BSMMessage));
+  
+  if (result != ESP_OK) {
+    Serial.print("ESP-NOW send failed: ");
+    Serial.println(result);
+  }
   
   stats.bsmSent++;
 }
 
 void sendHazardWarning(uint8_t hazardType, const char* description) {
   HazardMessage hazard;
+  memset(&hazard, 0, sizeof(HazardMessage));
+  
   hazard.msgType = MSG_HAZARD;
   strncpy(hazard.vehicleId, VEHICLE_ID, 16);
   hazard.timestamp = millis();
@@ -401,14 +533,34 @@ void sendHazardWarning(uint8_t hazardType, const char* description) {
   
   hazard.checksum = calculateChecksum((uint8_t*)&hazard, sizeof(HazardMessage) - 2);
   
+  // Send via ESP-NOW
   uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   esp_now_send(broadcastAddress, (uint8_t*)&hazard, sizeof(HazardMessage));
+  
+  // Also publish to MQTT
+  if (mqttClient.connected()) {
+    StaticJsonDocument<256> doc;
+    doc["type"] = "hazard";
+    doc["vehicle_id"] = VEHICLE_ID;
+    doc["timestamp"] = millis();
+    doc["latitude"] = vehicleState.latitude;
+    doc["longitude"] = vehicleState.longitude;
+    doc["hazard_type"] = hazardType;
+    doc["description"] = description;
+    
+    char jsonBuffer[256];
+    serializeJson(doc, jsonBuffer);
+    mqttClient.publish(MQTT_TOPIC, jsonBuffer);
+    stats.mqttPublished++;
+  }
   
   Serial.println("Hazard warning sent!");
 }
 
 void sendEmergencyAlert() {
   EmergencyMessage emergency;
+  memset(&emergency, 0, sizeof(EmergencyMessage));
+  
   emergency.msgType = MSG_EMERGENCY;
   strncpy(emergency.vehicleId, VEHICLE_ID, 16);
   emergency.timestamp = millis();
@@ -419,8 +571,26 @@ void sendEmergencyAlert() {
   
   emergency.checksum = calculateChecksum((uint8_t*)&emergency, sizeof(EmergencyMessage) - 2);
   
+  // Send via ESP-NOW
   uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   esp_now_send(broadcastAddress, (uint8_t*)&emergency, sizeof(EmergencyMessage));
+  
+  // Also publish to MQTT
+  if (mqttClient.connected()) {
+    StaticJsonDocument<256> doc;
+    doc["type"] = "emergency";
+    doc["vehicle_id"] = VEHICLE_ID;
+    doc["timestamp"] = millis();
+    doc["latitude"] = vehicleState.latitude;
+    doc["longitude"] = vehicleState.longitude;
+    doc["emergency_type"] = vehicleState.emergencyType;
+    doc["heading"] = vehicleState.heading;
+    
+    char jsonBuffer[256];
+    serializeJson(doc, jsonBuffer);
+    mqttClient.publish(MQTT_TOPIC, jsonBuffer);
+    stats.mqttPublished++;
+  }
   
   Serial.println("Emergency alert sent!");
 }
@@ -429,18 +599,50 @@ void sendV2IData() {
   if (!mqttClient.connected()) return;
   
   StaticJsonDocument<512> doc;
+  doc["type"] = "status";
   doc["vehicle_id"] = VEHICLE_ID;
   doc["timestamp"] = millis();
   doc["latitude"] = vehicleState.latitude;
   doc["longitude"] = vehicleState.longitude;
+  doc["altitude"] = vehicleState.altitude;
   doc["speed"] = vehicleState.speed;
   doc["heading"] = vehicleState.heading;
+  doc["acceleration"] = vehicleState.acceleration;
   doc["nearby_vehicles"] = nearbyVehicleCount;
+  doc["emergency_active"] = vehicleState.emergencyActive;
   
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer);
   
-  mqttClient.publish("v2x/vehicle/status", jsonBuffer);
+  if (mqttClient.publish(MQTT_TOPIC, jsonBuffer)) {
+    stats.mqttPublished++;
+  }
+}
+
+void publishBSMToMQTT(BSMMessage* msg) {
+  if (!mqttClient.connected()) return;
+  
+  // Don't publish own messages
+  if (strcmp(msg->vehicleId, VEHICLE_ID) == 0) return;
+  
+  StaticJsonDocument<384> doc;
+  doc["type"] = "bsm";
+  doc["vehicle_id"] = msg->vehicleId;
+  doc["timestamp"] = msg->timestamp;
+  doc["latitude"] = msg->latitude;
+  doc["longitude"] = msg->longitude;
+  doc["altitude"] = msg->altitude;
+  doc["speed"] = msg->speed;
+  doc["heading"] = msg->heading;
+  doc["acceleration"] = msg->acceleration;
+  doc["braking_status"] = msg->brakingStatus;
+  
+  char jsonBuffer[384];
+  serializeJson(doc, jsonBuffer);
+  
+  if (mqttClient.publish(MQTT_TOPIC, jsonBuffer)) {
+    stats.mqttPublished++;
+  }
 }
 
 // ==================== PROCESS RECEIVED MESSAGES ====================
@@ -610,6 +812,9 @@ void sendStatsToRaspberryPi() {
   Serial.print("Hazards Received: "); Serial.println(stats.hazardReceived);
   Serial.print("Emergencies Received: "); Serial.println(stats.emergencyReceived);
   Serial.print("Packets Dropped: "); Serial.println(stats.packetsDropped);
+  Serial.print("MQTT Published: "); Serial.println(stats.mqttPublished);
+  Serial.print("MQTT Received: "); Serial.println(stats.mqttReceived);
   Serial.print("Nearby Vehicles: "); Serial.println(nearbyVehicleCount);
+  Serial.print("MQTT Connected: "); Serial.println(mqttClient.connected() ? "Yes" : "No");
   Serial.println("===================");
 }

@@ -1,0 +1,76 @@
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | ============================================================
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | SDV Infotainment System Starting...
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | Version: 2.0.0
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | Python: 3.10.12 (main, Aug 15 2025, 14:32:43) [GCC 11.4.0]
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | Qt Version: 5.15.3
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | MQTT Available: True
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | WebEngine Available: False
+2025-11-02 04:28:11 | INFO     | InfotainmentSystem   | main                 | ============================================================
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | __init__             | Initializing InfotainmentMainWindow
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | __init__             | DataManager initialized
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending CONNECT (u0, p0, wr0, wq0, wf0, c1, k60) client_id=b'SDV_001_infotainment'
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | _connect             | MQTT connecting to localhost:1883
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | __init__             | Starting data simulator
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | __init__             | DataSimulator initialized
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Received CONNACK (0, 0)
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | _on_connect          | MQTT connected successfully
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m1) [(b'sdv/SDV_001/gps', 0)]
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/gps
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m2) [(b'sdv/SDV_001/adas', 0)]
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/adas
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m3) [(b'sdv/SDV_001/v2x', 0)]
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/v2x
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m4) [(b'sdv/SDV_001/system', 0)]
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/system
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | register_observer    | Observer registered: _on_data_updated
+2025-11-02 04:28:12 | INFO     | InfotainmentSystem   | __init__             | InfotainmentMainWindow initialized successfully
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:28:12 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:28:36 | INFO     | InfotainmentSystem   | closeEvent           | Shutting down infotainment system...
+2025-11-02 04:28:36 | INFO     | InfotainmentSystem   | stop                 | DataSimulator stopped
+2025-11-02 04:28:37 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending DISCONNECT
+2025-11-02 04:28:37 | INFO     | InfotainmentSystem   | _on_disconnect       | MQTT disconnected
+2025-11-02 04:28:37 | INFO     | InfotainmentSystem   | disconnect           | MQTT client disconnected
+2025-11-02 04:28:37 | INFO     | InfotainmentSystem   | save_to_file         | Configuration saved to config.json
+2025-11-02 04:28:37 | INFO     | InfotainmentSystem   | closeEvent           | Shutdown complete
+2025-11-02 04:28:37 | INFO     | InfotainmentSystem   | main                 | Application exited with code 0
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | ============================================================
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | SDV Infotainment System Starting...
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | Version: 2.0.0
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | Python: 3.10.12 (main, Aug 15 2025, 14:32:43) [GCC 11.4.0]
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | Qt Version: 5.15.3
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | MQTT Available: True
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | WebEngine Available: False
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | main                 | ============================================================
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | __init__             | Initializing InfotainmentMainWindow
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | __init__             | DataManager initialized
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending CONNECT (u0, p0, wr0, wq0, wf0, c1, k60) client_id=b'SDV_001_infotainment'
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | _connect             | MQTT connecting to localhost:1883
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | __init__             | Starting data simulator
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Received CONNACK (0, 0)
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | __init__             | DataSimulator initialized
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | _on_connect          | MQTT connected successfully
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m1) [(b'sdv/SDV_001/gps', 0)]
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/gps
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m2) [(b'sdv/SDV_001/adas', 0)]
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/adas
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m3) [(b'sdv/SDV_001/v2x', 0)]
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/v2x
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending SUBSCRIBE (d0, m4) [(b'sdv/SDV_001/system', 0)]
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _on_connect          | Subscribed to sdv/SDV_001/system
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | register_observer    | Observer registered: _on_data_updated
+2025-11-02 04:29:26 | INFO     | InfotainmentSystem   | __init__             | InfotainmentMainWindow initialized successfully
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:29:26 | DEBUG    | InfotainmentSystem   | _easy_log            | Received SUBACK
+2025-11-02 04:29:37 | INFO     | InfotainmentSystem   | closeEvent           | Shutting down infotainment system...
+2025-11-02 04:29:37 | INFO     | InfotainmentSystem   | stop                 | DataSimulator stopped
+2025-11-02 04:29:38 | DEBUG    | InfotainmentSystem   | _easy_log            | Sending DISCONNECT
+2025-11-02 04:29:38 | INFO     | InfotainmentSystem   | _on_disconnect       | MQTT disconnected
+2025-11-02 04:29:38 | INFO     | InfotainmentSystem   | disconnect           | MQTT client disconnected
+2025-11-02 04:29:38 | INFO     | InfotainmentSystem   | save_to_file         | Configuration saved to config.json
+2025-11-02 04:29:38 | INFO     | InfotainmentSystem   | closeEvent           | Shutdown complete
+2025-11-02 04:29:38 | INFO     | InfotainmentSystem   | main                 | Application exited with code 0
