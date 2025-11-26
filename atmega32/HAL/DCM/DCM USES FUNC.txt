@@ -1,0 +1,8 @@
+WE CAN USE THIS FUNC ONLY DO NOT USE ANOTHER 
+
+
+void DCM_Move_Forward(u8 Speed);
+void DCM_Move_Backward(u8 Speed);
+void DCM_Turn_Right(u8 Speed);
+void DCM_Turn_Left(u8 Speed);
+void DCM_Stop(void);

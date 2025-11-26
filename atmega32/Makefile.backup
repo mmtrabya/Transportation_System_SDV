@@ -1,0 +1,196 @@
+# Makefile for ATmega32 SDV Project
+# Location: atmega32/Makefile
+
+# Project name
+PROJECT = sdv_atmega32
+
+# MCU settings
+MCU = atmega32
+F_CPU = 16000000UL
+BAUD = 115200
+
+# Programmer settings (adjust for your programmer)
+PROGRAMMER = usbasp
+PORT = /dev/ttyUSB0
+
+# Compiler and tools
+CC = avr-gcc
+OBJCOPY = avr-objcopy
+OBJDUMP = avr-objdump
+SIZE = avr-size
+AVRDUDE = avrdude
+
+# Compiler flags
+CFLAGS = -mmcu=$(MCU) -DF_CPU=$(F_CPU) -DBAUD=$(BAUD)
+CFLAGS += -Os -Wall -Wextra
+CFLAGS += -std=gnu99
+CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CFLAGS += -ffunction-sections -fdata-sections
+
+# Linker flags
+LDFLAGS = -mmcu=$(MCU)
+LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,-Map,$(PROJECT).map
+
+# Include paths
+INCLUDES = -I.
+INCLUDES += -I./MCAL/DIO
+INCLUDES += -I./MCAL/ADC
+INCLUDES += -I./MCAL/EEPROM
+INCLUDES += -I./MCAL/GIE
+INCLUDES += -I./MCAL/EXIT
+INCLUDES += -I./MCAL/SPI
+INCLUDES += -I./MCAL/String
+INCLUDES += -I./MCAL/TIMER0
+INCLUDES += -I./MCAL/TIMER1/VERSION_2_ULTRA_SONIC
+INCLUDES += -I./MCAL/TWI
+INCLUDES += -I./MCAL/UART
+INCLUDES += -I./MCAL/WTD
+INCLUDES += -I./HAL/Buzzer
+INCLUDES += -I./HAL/DCM
+INCLUDES += -I./HAL/GPS
+INCLUDES += -I./HAL/LCD
+INCLUDES += -I./HAL/LED
+INCLUDES += -I./HAL/MPU9250
+INCLUDES += -I./HAL/QMC5883L
+INCLUDES += -I./HAL/ULTRASO
+INCLUDES += -I./CFG
+INCLUDES += -I./APP
+
+# Source files
+SRCS = main.c
+SRCS += APP/raspberry_pi_protocol.c
+
+# Add all MCAL source files
+SRCS += $(wildcard MCAL/DIO/*.c)
+SRCS += $(wildcard MCAL/ADC/*.c)
+SRCS += $(wildcard MCAL/EEPROM/*.c)
+SRCS += $(wildcard MCAL/GIE/*.c)
+SRCS += $(wildcard MCAL/EXIT/*.c)
+SRCS += $(wildcard MCAL/SPI/*.c)
+SRCS += $(wildcard MCAL/String/*.c)
+SRCS += $(wildcard MCAL/TIMER0/*.c)
+SRCS += $(wildcard MCAL/TIMER1/VERSION_2_ULTRA_SONIC/*.c)
+SRCS += $(wildcard MCAL/TWI/*.c)
+SRCS += $(wildcard MCAL/UART/*.c)
+SRCS += $(wildcard MCAL/WTD/*.c)
+
+# Add all HAL source files
+SRCS += $(wildcard HAL/Buzzer/*.c)
+SRCS += $(wildcard HAL/DCM/*.c)
+SRCS += $(wildcard HAL/GPS/*.c)
+SRCS += $(wildcard HAL/LCD/*.c)
+SRCS += $(wildcard HAL/LED/*.c)
+SRCS += $(wildcard HAL/MPU9250/*.c)
+SRCS += $(wildcard HAL/QMC5883L/*.c)
+SRCS += $(wildcard HAL/ULTRASO/*.c)
+
+# Object files
+OBJS = $(SRCS:.c=.o)
+
+# Build directory
+BUILD_DIR = build
+
+# Default target
+all: $(BUILD_DIR) $(PROJECT).hex $(PROJECT).eep size
+
+# Create build directory
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+# Compile C files
+%.o: %.c
+	@echo "Compiling: $<"
+	@$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Link object files
+$(PROJECT).elf: $(OBJS)
+	@echo "Linking: $@"
+	@$(CC) $(LDFLAGS) $(OBJS) -o $@ -lm
+	@echo "Build complete!"
+
+# Create HEX file
+$(PROJECT).hex: $(PROJECT).elf
+	@echo "Creating HEX: $@"
+	@$(OBJCOPY) -O ihex -R .eeprom $< $@
+
+# Create EEPROM file
+$(PROJECT).eep: $(PROJECT).elf
+	@echo "Creating EEPROM: $@"
+	@$(OBJCOPY) -j .eeprom --set-section-flags=.eeprom="alloc,load" \
+		--change-section-lma .eeprom=0 -O ihex $< $@ 2>/dev/null || true
+
+# Display size information
+size: $(PROJECT).elf
+	@echo ""
+	@echo "=== Size Information ==="
+	@$(SIZE) --format=avr --mcu=$(MCU) $<
+	@echo ""
+
+# Flash to MCU using avrdude (adjust programmer as needed)
+flash: $(PROJECT).hex
+	@echo "Flashing to ATmega32..."
+	$(AVRDUDE) -c $(PROGRAMMER) -p $(MCU) -U flash:w:$<:i
+
+# Flash using USB serial programmer
+flash-serial: $(PROJECT).hex
+	@echo "Flashing via serial port $(PORT)..."
+	$(AVRDUDE) -c arduino -p $(MCU) -P $(PORT) -b 19200 -U flash:w:$<:i
+
+# Read fuses
+fuses-read:
+	$(AVRDUDE) -c $(PROGRAMMER) -p $(MCU) -U lfuse:r:-:h -U hfuse:r:-:h
+
+# Set fuses for external 16MHz crystal
+# CKSEL=1111 (External Crystal/Resonator High Freq)
+# SUT=11 (Startup time)
+# CKOPT=0 (Full output swing)
+fuses-write:
+	$(AVRDUDE) -c $(PROGRAMMER) -p $(MCU) -U lfuse:w:0xFF:m -U hfuse:w:0xD9:m
+
+# Clean build files
+clean:
+	@echo "Cleaning build files..."
+	@rm -f $(OBJS)
+	@rm -f $(PROJECT).elf $(PROJECT).hex $(PROJECT).eep $(PROJECT).map
+	@rm -rf $(BUILD_DIR)
+	@echo "Clean complete!"
+
+# Disassemble
+disasm: $(PROJECT).elf
+	$(OBJDUMP) -d $< > $(PROJECT).asm
+
+# Show help
+help:
+	@echo "ATmega32 SDV Project Makefile"
+	@echo "=============================="
+	@echo "Available targets:"
+	@echo "  all           - Build the project (default)"
+	@echo "  flash         - Flash using USBasp programmer"
+	@echo "  flash-serial  - Flash using serial programmer"
+	@echo "  clean         - Remove build files"
+	@echo "  size          - Show memory usage"
+	@echo "  fuses-read    - Read current fuse settings"
+	@echo "  fuses-write   - Set fuses for 16MHz external crystal"
+	@echo "  disasm        - Create disassembly file"
+	@echo "  help          - Show this help"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  MCU:        $(MCU)"
+	@echo "  F_CPU:      $(F_CPU)"
+	@echo "  Programmer: $(PROGRAMMER)"
+	@echo "  Port:       $(PORT)"
+debug:
+	@echo "=== Directory Contents ==="
+	@echo "UART files: " && ls MCAL/UART/*.c 2>/dev/null || echo "No .c files"
+	@echo "TWI files: " && ls MCAL/TWI/*.c 2>/dev/null || echo "No .c files"  
+	@echo "WTD files: " && ls MCAL/WTD/*.c 2>/dev/null || echo "No .c files"
+	@echo ""
+	@echo "=== Makefile Variables ==="
+	@echo "UART sources: $(wildcard MCAL/UART/*.c)"
+	@echo "TWI sources: $(wildcard MCAL/TWI/*.c)"
+	@echo "WTD sources: $(wildcard MCAL/WTD/*.c)"
+	@echo ""
+	@echo "Total SRCS: $(words $(SRCS)) files"
+	@echo "Total OBJS: $(words $(OBJS)) files"
+.PHONY: all clean flash flash-serial size fuses-read fuses-write disasm help

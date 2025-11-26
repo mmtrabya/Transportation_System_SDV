@@ -1,0 +1,66 @@
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "/home/mmtrabya/Graduation_Project_SDV/esp32/include",
+                "/home/mmtrabya/Graduation_Project_SDV/esp32/src",
+                "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/cores/esp32",
+                "/home/mmtrabya/.platformio/packages/framework-arduinoespressif32/variants/esp32"
+            ],
+            "defines": [
+                "PLATFORMIO=60118",
+                "ESP32",
+                "F_CPU=240000000L"
+            ],
+            "cStandard": "gnu99",
+            "cppStandard": "gnu++11",
+            "compilerPath": "/home/mmtrabya/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc"
+        },
+        {
+            "name": "AVR-ATmega32",
+            "includePath": [
+                "${workspaceFolder}/atmega32",
+                "${workspaceFolder}/atmega32/MCAL/DIO",
+                "${workspaceFolder}/atmega32/MCAL/ADC",
+                "${workspaceFolder}/atmega32/MCAL/EEPROM",
+                "${workspaceFolder}/atmega32/MCAL/GIE",
+                "${workspaceFolder}/atmega32/MCAL/EXIT",
+                "${workspaceFolder}/atmega32/MCAL/SPI",
+                "${workspaceFolder}/atmega32/MCAL/String",
+                "${workspaceFolder}/atmega32/MCAL/TIMER0",
+                "${workspaceFolder}/atmega32/MCAL/TIMER1/VERSION_2_ULTRA_SONIC",
+                "${workspaceFolder}/atmega32/MCAL/TWI",
+                "${workspaceFolder}/atmega32/MCAL/UART",
+                "${workspaceFolder}/atmega32/MCAL/WTD",
+                "${workspaceFolder}/atmega32/HAL/Buzzer",
+                "${workspaceFolder}/atmega32/HAL/DCM",
+                "${workspaceFolder}/atmega32/HAL/LCD",
+                "${workspaceFolder}/atmega32/HAL/LED",
+                "${workspaceFolder}/atmega32/HAL/MPU9250",
+                "${workspaceFolder}/atmega32/HAL/ULTRASO",
+                "${workspaceFolder}/atmega32/CFG",
+                "${workspaceFolder}/atmega32/APP",
+                "/usr/lib/avr/include",
+                "/usr/lib/gcc/avr/5.4.0/include"
+            ],
+            "defines": [
+                "__AVR_ATmega32__",
+                "F_CPU=16000000UL"
+            ],
+            "compilerPath": "/usr/bin/avr-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/atmega32",
+                    "/usr/lib/avr/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "forcedInclude": []
+        }
+    ],
+    "version": 4
+}

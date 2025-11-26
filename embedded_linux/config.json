@@ -1,0 +1,21 @@
+{
+  "screen_width": 1024,
+  "screen_height": 600,
+  "fullscreen": false,
+  "fps_limit": 60,
+  "primary_color": "#D6FF3F",
+  "warning_color": "#FFC107",
+  "danger_color": "#F44336",
+  "success_color": "#4CAF50",
+  "bg_color": "#121212",
+  "panel_color": "#1E1E1E",
+  "text_color": "#FFFFFF",
+  "mqtt_broker": "localhost",
+  "mqtt_port": 1883,
+  "mqtt_keepalive": 60,
+  "mqtt_reconnect_delay": 5,
+  "vehicle_id": "SDV_001",
+  "google_maps_api_key": "AIzaSyAYBEhbP3Zf0-z7Y5QKedoR1YIK6P4oLkE",
+  "data_update_interval_ms": 100,
+  "ui_update_interval_ms": 33
+}
