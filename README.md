@@ -24,7 +24,6 @@
 ├── README.md
 ├── scripts
 ├── sdv_application
-├── sdv_firebase_key.json
 ├── server
 └── tests
 ```
