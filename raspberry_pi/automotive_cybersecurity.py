@@ -56,7 +56,7 @@ class SecurityConfig:
     # Intrusion detection
     ANOMALY_THRESHOLD = 0.75
     MAX_FAILED_AUTH = 5
-    MAX_MESSAGES_PER_SECOND = 100
+    MAX_MESSAGES_PER_SECOND = 50
     
     # Vehicle info
     VEHICLE_ID = "SDV_001"
