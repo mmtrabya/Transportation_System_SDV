@@ -536,8 +536,11 @@ class IntrusionDetectionSystem:
         
         # Attack counters
         self.failed_auth_attempts = defaultdict(int)
-        self.message_rates = defaultdict(lambda: deque(maxlen=100))
+        self.message_rates = defaultdict(lambda: deque(maxlen=200))
         self.blacklisted_peers = set()
+        
+        # DoS detection deduplication
+        self.last_dos_detection = {}  # peer_id -> timestamp
         
         # Baseline behavior
         self.baseline_message_rate = 10  # messages/second
@@ -578,21 +581,31 @@ class IntrusionDetectionSystem:
         
         # Calculate messages per second (count messages within last 1 second)
         recent_messages = [t for t in self.message_rates[peer_id] 
-                        if current_time - t <= 1.0]
+                          if current_time - t <= 1.0]
         rate = len(recent_messages)
         
         # If rate exceeds threshold, log DoS attack event
         if rate > SecurityConfig.MAX_MESSAGES_PER_SECOND:
-            event = SecurityEvent(
-                timestamp=current_time,
-                event_type="dos_attack",
-                severity="high",
-                source=peer_id,
-                description=f"Message flood detected from {peer_id}: {rate} msg/s",
-                metadata={'rate': rate}
-            )
-            self.log_event(event)
+            # Only log event once per 5-second window to avoid spam
+            last_detection = self.last_dos_detection.get(peer_id, 0)
+            
+            if current_time - last_detection >= 5.0:  # 5 second cooldown
+                event = SecurityEvent(
+                    timestamp=current_time,
+                    event_type="dos_attack",
+                    severity="high",
+                    source=peer_id,
+                    description=f"Message flood detected from {peer_id}: {rate} msg/s",
+                    metadata={'rate': rate, 'threshold': SecurityConfig.MAX_MESSAGES_PER_SECOND}
+                )
+                self.log_event(event)
+                self.last_dos_detection[peer_id] = current_time
+            
             return True
+        else:
+            # Rate is normal - reset detection timer
+            if peer_id in self.last_dos_detection:
+                del self.last_dos_detection[peer_id]
         
         return False
     
