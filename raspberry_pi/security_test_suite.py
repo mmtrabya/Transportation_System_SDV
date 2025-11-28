@@ -265,7 +265,7 @@ class SecurityTester:
     
     # ==================== TEST 5: DoS ATTACK PREVENTION ====================
     
-    def test_dos_prevention_debug(self):
+    def test_dos_prevention(self):
         """Debug version - shows what's happening"""
         self.print_header("TEST 5: DoS ATTACK PREVENTION (DEBUG MODE)")
         

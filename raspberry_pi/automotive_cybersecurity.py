@@ -576,11 +576,12 @@ class IntrusionDetectionSystem:
         current_time = time.time()
         self.message_rates[peer_id].append(current_time)
         
-        # Calculate messages per second (messages within last 1 second)
+        # Calculate messages per second (count messages within last 1 second)
         recent_messages = [t for t in self.message_rates[peer_id] 
                         if current_time - t <= 1.0]
         rate = len(recent_messages)
         
+        # If rate exceeds threshold, log DoS attack event
         if rate > SecurityConfig.MAX_MESSAGES_PER_SECOND:
             event = SecurityEvent(
                 timestamp=current_time,
