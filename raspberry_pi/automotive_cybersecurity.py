@@ -576,34 +576,21 @@ class IntrusionDetectionSystem:
         current_time = time.time()
         self.message_rates[peer_id].append(current_time)
         
-        # Calculate messages per second (count messages within last 1 second)
+        # Calculate messages per second (messages within last 1 second)
         recent_messages = [t for t in self.message_rates[peer_id] 
-                        if current_time - t < 1.0]
+                        if current_time - t <= 1.0]
         rate = len(recent_messages)
         
-        # Log the rate for debugging
-        if rate > SecurityConfig.MAX_MESSAGES_PER_SECOND * 0.8:
-            logger.debug(f"High message rate from {peer_id}: {rate} msg/s")
-        
         if rate > SecurityConfig.MAX_MESSAGES_PER_SECOND:
-            # Only log event once per peer per detection window
-            # Check if we already logged this attack recently
-            recent_dos_events = [e for e in list(self.security_events)[-10:]
-                                if e.event_type == 'dos_attack' 
-                                and e.source == peer_id
-                                and current_time - e.timestamp < 5.0]
-            
-            if not recent_dos_events:  # Only log if not already logged recently
-                event = SecurityEvent(
-                    timestamp=current_time,
-                    event_type="dos_attack",
-                    severity="high",
-                    source=peer_id,
-                    description=f"Message flood detected from {peer_id}: {rate} msg/s",
-                    metadata={'rate': rate, 'threshold': SecurityConfig.MAX_MESSAGES_PER_SECOND}
-                )
-                self.log_event(event)
-            
+            event = SecurityEvent(
+                timestamp=current_time,
+                event_type="dos_attack",
+                severity="high",
+                source=peer_id,
+                description=f"Message flood detected from {peer_id}: {rate} msg/s",
+                metadata={'rate': rate}
+            )
+            self.log_event(event)
             return True
         
         return False
