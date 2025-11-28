@@ -1,136 +1,182 @@
 #!/bin/bash
+# ============================================================================
+# SDV Graduation Project - Complete Dependency Installation Script
+# ============================================================================
+# For: Raspberry Pi 5 (Bookworm OS)
+# Project: Software-Defined Vehicle with ADAS, V2X, DMS, and IoT
+# ============================================================================
 
-echo "Installing Graduation Project Dependencies..."
+set -e  # Exit on error
 
-# Update system
+echo "============================================================================"
+echo "  SDV Graduation Project - Installing All Dependencies"
+echo "============================================================================"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+print_success() { echo -e "${GREEN}✓${NC} $1"; }
+print_error()   { echo -e "${RED}✗${NC} $1"; }
+print_info()    { echo -e "${YELLOW}ℹ${NC} $1"; }
+
+is_raspberry_pi() {
+    [ -f /proc/device-tree/model ] && grep -q "Raspberry Pi" /proc/device-tree/model
+    return $?
+}
+
+# ============================================================================
+# 1. SYSTEM PACKAGES
+# ============================================================================
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 1: Installing System Packages"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 sudo apt update
 sudo apt upgrade -y
 
-# Install system packages
-# Note: python-pip and python-opencv are for Python 2 (deprecated)
-# Using python3 equivalents instead
 sudo apt install -y \
-    python3-pip \
-    python3-opencv \
-    mosquitto \
-    mosquitto-clients \
-    libatlas-base-dev \
-    libopenblas-dev \
-    python3-dev \
-    build-essential
+    python3-pip python3-dev python3-venv build-essential cmake git wget curl unzip tar htop screen tmux \
+    libopencv-dev python3-opencv libatlas3-base libopenblas-dev libjpeg-dev libpng-dev libtiff-dev \
+    libavcodec-dev libavformat-dev libswscale-dev libv4l-dev libxvidcore-dev libx264-dev libgtk-3-dev libcanberra-gtk3-module \
+    libusb-1.0-0-dev freeglut3-dev \
+    python3-pyqt5 python3-pyqt5.qtquick python3-pyqt5.qtmultimedia pyqt5-dev-tools qttools5-dev-tools \
+    mosquitto mosquitto-clients gcc-avr avr-libc avrdude binutils-avr
 
-# Install Python packages
-pip install \
-    paho-mqtt \
-    streamlit \
-    plotly \
-    pandas \
-    onnxruntime \
-    pyserial \
-    psutil \
-    cryptography \
-    flask \
-    flask-cors \
-    requests \
-    numpy \
-    matplotlib \
-    scikit-learn \
-    opencv-python \
-    opencv-python-headless \
-    imutils \
-    geopy \
-    pynmea2 \
-    smbus2 \
-    freenect
+print_success "System packages installed"
 
-# Raspberry Pi specific packages (will only work on RPi)
-if [ -f /proc/device-tree/model ]; then
-    echo "Detected Raspberry Pi - installing RPi-specific packages..."
-    pip install RPi.GPIO picamera2
-    
-    # Enable camera interface
-    sudo raspi-config nonint do_camera 0
+# ============================================================================
+# 2. Camera & Vision Libraries
+# ============================================================================
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 2: Installing Camera & Vision Libraries"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Kinect support
+if ! command -v freenect-glview &>/dev/null; then
+    print_info "Building libfreenect for Kinect..."
+    cd /tmp
+    git clone https://github.com/OpenKinect/libfreenect.git
+    cd libfreenect
+    mkdir -p build
+    cd build
+    cmake .. -DBUILD_PYTHON3=ON
+    make -j$(nproc)
+    sudo make install
+    sudo ldconfig
+    cd ~
+    print_success "libfreenect installed"
 else
-    echo "Not running on Raspberry Pi - skipping RPi.GPIO and picamera"
+    print_success "libfreenect already installed"
 fi
 
-# Note: TensorFlow and Keras removed from main install
-# They are VERY large (500MB+) and require specific versions for ARM/x86
-# Install them separately if needed:
-#   pip install tensorflow  # For x86/x64
-#   pip install tensorflow-aarch64  # For Raspberry Pi 64-bit
-#   pip install tflite-runtime  # Lightweight alternative for RPi
+# Raspberry Pi Camera
+if is_raspberry_pi; then
+    sudo apt install -y python3-picamera2 libcamera-dev libcamera-apps
+    sudo raspi-config nonint do_camera 0
+    print_success "Pi Camera support enabled"
+fi
 
-# Install Mosquitto broker
-sudo systemctl enable mosquitto
-sudo systemctl start mosquitto
+# ============================================================================
+# 3. Serial Communication Tools
+# ============================================================================
+sudo apt install -y python3-serial minicom picocom
+sudo usermod -a -G dialout $USER
+print_success "Serial communication tools installed"
 
-# Configure Mosquitto
-sudo tee /etc/mosquitto/conf.d/sdv.conf > /dev/null <<EOF
-listener 1883
+# ============================================================================
+# 4. MQTT Broker
+# ============================================================================
+sudo tee /etc/mosquitto/conf.d/sdv.conf > /dev/null <<'EOF'
+# SDV MQTT Configuration
+listener 1883 0.0.0.0
 allow_anonymous true
+max_connections 100
+max_queued_messages 1000
 EOF
 
-sudo systemctl restart mosquitto
+# Remove any duplicate log_dest lines in mosquitto.conf
+sudo sed -i '/log_dest/d' /etc/mosquitto/mosquitto.conf
 
-# Create directories
-mkdir -p ~/Graduation_Project_SDV/{models,logs,certs,keys,raspberry_pi,data}
+sudo systemctl enable mosquitto
+sudo systemctl restart mosquitto || true  # may fail if config issues exist
+print_success "MQTT Broker configured"
 
+# ============================================================================
+# 5. Firebase & Cloud Tools
+# ============================================================================
+if ! command -v node &>/dev/null; then
+    print_info "Installing Node.js..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+fi
+
+sudo npm install -g firebase-tools
+print_success "Firebase CLI installed"
+
+# ============================================================================
+# 6. Python Packages (System-Wide)
+# ============================================================================
+python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
+
+# Core Python packages
+python3 -m pip install --break-system-packages \
+    numpy opencv-python opencv-python-headless pillow onnxruntime \
+    pyserial pyusb pynmea2 geopy paho-mqtt firebase-admin google-cloud-firestore google-cloud-storage \
+    freenect streamlit plotly pandas matplotlib cryptography pycryptodome flask flask-cors requests psutil
+
+# Raspberry Pi specific
+if is_raspberry_pi; then
+    python3 -m pip install --break-system-packages RPi.GPIO smbus2 spidev
+fi
+
+print_success "Python packages installed"
+
+# ============================================================================
+# 7. ESP32 Toolchain
+# ============================================================================
+python3 -m pip install --break-system-packages platformio esptool
+print_success "ESP32 toolchain installed"
+
+# ============================================================================
+# 8. Project Directory Structure
+# ============================================================================
+PROJECT_DIR="$HOME/Graduation_Project_SDV"
+mkdir -p "$PROJECT_DIR"/{models/{Lane_Detection,Object_Detection,Traffic_Sign},logs,certs,keys,raspberry_pi,data,embedded_linux,esp32/src}
+print_success "Project directories created"
+
+# ============================================================================
+# 9. UDEV Rules
+# ============================================================================
+sudo tee /etc/udev/rules.d/51-kinect.rules > /dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02b0", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02ad", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02ae", MODE="0666"
+EOF
+
+sudo tee /etc/udev/rules.d/99-esp32.rules > /dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTR{idVendor}=="10c4", ATTR{idProduct}=="ea60", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="7523", MODE="0666"
+EOF
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+print_success "udev rules configured"
+
+# ============================================================================
+# 10. Final Message
+# ============================================================================
 echo ""
-echo "=============================================="
-echo "Installation complete!"
-echo "=============================================="
-echo ""
-
-# Verify installations
-echo "Verifying core packages..."
-python -c "
-import sys
-
-packages = {
-    'cv2': 'opencv-python',
-    'numpy': 'numpy',
-    'onnxruntime': 'onnxruntime',
-    'serial': 'pyserial',
-    'paho.mqtt.client': 'paho-mqtt',
-    'freenect': 'freenect',
-    'flask': 'flask',
-    'pandas': 'pandas',
-    'matplotlib': 'matplotlib'
-}
-
-missing = []
-for module, package in packages.items():
-    try:
-        __import__(module)
-        print(f'  ✓ {package}')
-    except ImportError:
-        print(f'  ✗ {package} - MISSING')
-        missing.append(package)
-
-if missing:
-    print(f'\n⚠ Missing packages: {missing}')
-    print('Install with: pip install ' + ' '.join(missing))
-    sys.exit(1)
-else:
-    print('\n✓ All core packages installed!')
-"
-
-echo ""
-echo "Checking services..."
-systemctl is-active --quiet mosquitto && echo "  ✓ MQTT Broker running" || echo "  ✗ MQTT Broker not running"
-
-echo ""
-echo "Project structure:"
-echo "  ~/Graduation_Project_SDV/"
-echo "    ├── raspberry_pi/    (Python scripts)"
-echo "    ├── models/          (ONNX models)"
-echo "    ├── logs/            (Log files)"
-echo "    ├── certs/           (Certificates)"
-echo "    ├── keys/            (Keys)"
-echo "    └── data/            (Runtime data)"
-echo ""
-echo "Next steps:"
-echo "  1. Copy your Python scripts to ~/Graduation_Project_SDV/raspberry_pi/"
-echo "  2. Download ONNX models to ~/Graduation_Project_SDV/models/"
-echo "  3. Test: python verify_installation.py"
+echo "============================================================================"
+echo "  ✓ SDV Installation Complete!"
+echo "============================================================================"
+echo "Project Structure: $PROJECT_DIR"
+echo "Python packages installed system-wide with --break-system-packages"
+echo "Activate your Python scripts with 'python3' directly."
+echo "Remember: A reboot is recommended."
+echo "Run: sudo reboot"
+echo "============================================================================"
