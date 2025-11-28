@@ -3,3 +3,11 @@ server/sdv_firebase_key.json
 embedded_linux/sdv_firebase_key.json
 raspberry_pi/sdv_firebase_key.json
 sdv_firebase_key.json
+esp32/scripts/setup_credentials_*.cpp
+esp32/scripts/credentials_*.cpp
+esp32/scripts/*credentials*.cpp
+backup/*credentials*
+backup/setup_*
+*.credentials
+.env.local
+secrets.*
