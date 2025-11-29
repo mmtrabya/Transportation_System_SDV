@@ -13,7 +13,7 @@ CERTS_DIR = BASE_DIR / "certs"
 KEYS_DIR = BASE_DIR / "keys"
 
 # Vehicle Information
-VEHICLE_ID = "SDV_001"
+VEHICLE_ID = "SDV001"
 HARDWARE_VERSION = "1.0"
 
 # Serial Ports
