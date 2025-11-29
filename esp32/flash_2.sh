@@ -145,4 +145,5 @@ echo -e "${BLUE}🖥️  Opening serial monitor...${NC}"
 echo -e "${YELLOW}    Press Ctrl+C to exit monitor${NC}\n"
 sleep 2
 
+pio run -e esp32dev --target upload --upload-port "$PORT" --upload-speed $BAUD
 pio device monitor -e esp32dev --port "$PORT" --baud $BAUD

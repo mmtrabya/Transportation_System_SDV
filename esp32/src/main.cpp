@@ -1,29 +1,38 @@
 /*
- * SECURE ESP32 V2X System with NVS Credential Storage
- * No hardcoded credentials - all loaded from secure NVS
+ * SECURE ESP32 V2X System with REAL-TIME Firebase
+ * 10Hz Firebase updates for real-time dashboard
  */
 
 #include <WiFi.h>
 #include <esp_now.h>
-#include <PubSubClient.h>
+#include <Firebase_ESP_Client.h>
 #include <ArduinoJson.h>
 #include <mbedtls/aes.h>
 #include <mbedtls/sha256.h>
 #include "SecureCredentials.h"
+#include "addons/TokenHelper.h"
+#include "addons/RTDBHelper.h"
 
 // ==================== SECURE CONFIGURATION ====================
-// ✅ NO HARDCODED CREDENTIALS - All loaded from NVS
 SecureCredentialManager credManager;
+
+// Firebase objects
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+bool firebaseReady = false;
 
 // Message types
 #define MSG_BSM 0x01
 #define MSG_EMERGENCY 0x02
 #define MSG_HAZARD 0x03
-#define MSG_SIGNAL 0x04
 
-// Intervals
-#define BSM_INTERVAL 100      // 10Hz
-#define V2I_INTERVAL 1000     // 1Hz
+// Intervals - REAL-TIME CONFIGURATION
+#define BSM_INTERVAL 100           // 10Hz - ESP-NOW broadcasts
+#define FIREBASE_BSM_INTERVAL 100  // 10Hz - Real-time Firebase updates
+#define FIREBASE_TELEMETRY_INTERVAL 1000  // 1Hz - Telemetry (less critical)
+#define FIREBASE_STATUS_INTERVAL 5000     // 0.2Hz - System status
 
 // ==================== DATA STRUCTURES ====================
 struct BSMMessage {
@@ -64,9 +73,6 @@ struct EmergencyMessage {
 };
 
 // ==================== GLOBAL VARIABLES ====================
-WiFiClient wifiClient;
-PubSubClient mqttClient(wifiClient);
-
 struct VehicleState {
   float latitude = 30.0444;
   float longitude = 31.2357;
@@ -75,6 +81,7 @@ struct VehicleState {
   float heading = 0.0;
   float acceleration = 0.0;
   uint8_t brakingStatus = 0;
+  uint8_t batteryLevel = 85;
   bool emergencyActive = false;
   uint8_t emergencyType = 0;
 } vehicleState;
@@ -98,12 +105,15 @@ struct Stats {
   uint32_t hazardReceived = 0;
   uint32_t emergencyReceived = 0;
   uint32_t packetsDropped = 0;
-  uint32_t mqttPublished = 0;
-  uint32_t mqttReceived = 0;
+  uint32_t firebaseUploads = 0;
+  uint32_t firebaseDownloads = 0;
+  uint32_t firebaseErrors = 0;
 } stats;
 
 unsigned long lastBSMTime = 0;
-unsigned long lastV2ITime = 0;
+unsigned long lastFirebaseBSMTime = 0;
+unsigned long lastFirebaseTelemetryTime = 0;
+unsigned long lastFirebaseStatusTime = 0;
 unsigned long lastStatsTime = 0;
 
 // Security keys (loaded from NVS)
@@ -112,20 +122,17 @@ uint8_t hmacKey[32];
 
 // ==================== FUNCTION PROTOTYPES ====================
 void setupWiFi();
-void setupMQTT();
-void reconnectMQTT();
-void mqttCallback(char* topic, byte* payload, unsigned int length);
+void setupFirebase();
 void setupESPNow();
 void onDataReceived(const uint8_t *mac, const uint8_t *data, int len);
 void onDataSent(const uint8_t *mac, esp_now_send_status_t status);
 void sendBSM();
-void sendHazardWarning(uint8_t hazardType, const char* description);
-void sendEmergencyAlert();
 void processReceivedBSM(BSMMessage* msg);
 void processReceivedHazard(HazardMessage* msg);
 void processReceivedEmergency(EmergencyMessage* msg);
-void sendV2IData();
-void publishBSMToMQTT(BSMMessage* msg);
+void uploadBSMToFirebase();
+void uploadTelemetryToFirebase();
+void uploadSystemStatus();
 void updateVehicleState();
 void cleanupOldVehicles();
 uint16_t calculateChecksum(uint8_t* data, size_t len);
@@ -140,20 +147,17 @@ void setup() {
   delay(1000);
   
   Serial.println("\n╔════════════════════════════════════════╗");
-  Serial.println("║  SECURE ESP32 V2X Communication System  ║");
+  Serial.println("║  REAL-TIME ESP32 V2X with Firebase    ║");
+  Serial.println("║  10Hz Firebase Updates                 ║");
   Serial.println("╚════════════════════════════════════════╝\n");
   
   // ✅ Load secure credentials from NVS
   if (!credManager.begin()) {
     Serial.println("\n❌ FATAL: Failed to load credentials from NVS!");
     Serial.println("💡 Solution: Run the setup script first to store credentials");
-    Serial.println("   1. Flash setup_credentials_vX.cpp");
-    Serial.println("   2. Wait for success message");
-    Serial.println("   3. Flash this main application\n");
     while(1) delay(1000);
   }
   
-  // Show credential status (masked for security)
   credManager.printStatus();
   
   // Load security keys
@@ -165,32 +169,44 @@ void setup() {
   
   // Setup communication
   setupWiFi();
-  setupMQTT();
+  setupFirebase();
   setupESPNow();
   
-  Serial.println("\n✅ Secure V2X System Ready!");
-  Serial.println("Commands: BSM, HAZARD, EMERGENCY, STATS\n");
+  Serial.println("\n✅ Real-time V2X System Ready!");
+  Serial.println("📡 Firebase BSM: 10Hz (100ms)");
+  Serial.println("📊 Firebase Telemetry: 1Hz (1000ms)");
+  Serial.println("💚 Firebase Status: 0.2Hz (5000ms)\n");
 }
 
 // ==================== MAIN LOOP ====================
 void loop() {
   unsigned long currentTime = millis();
   
-  if (!mqttClient.connected()) {
-    reconnectMQTT();
-  }
-  mqttClient.loop();
-  
+  // Send BSM via ESP-NOW every 100ms (10Hz)
   if (currentTime - lastBSMTime >= BSM_INTERVAL) {
     sendBSM();
     lastBSMTime = currentTime;
   }
   
-  if (currentTime - lastV2ITime >= V2I_INTERVAL) {
-    sendV2IData();
-    lastV2ITime = currentTime;
+  // Upload BSM to Firebase every 100ms (10Hz) - REAL-TIME
+  if (currentTime - lastFirebaseBSMTime >= FIREBASE_BSM_INTERVAL && firebaseReady) {
+    uploadBSMToFirebase();
+    lastFirebaseBSMTime = currentTime;
   }
   
+  // Upload telemetry every 1 second (1Hz)
+  if (currentTime - lastFirebaseTelemetryTime >= FIREBASE_TELEMETRY_INTERVAL && firebaseReady) {
+    uploadTelemetryToFirebase();
+    lastFirebaseTelemetryTime = currentTime;
+  }
+  
+  // Upload system status every 5 seconds (0.2Hz)
+  if (currentTime - lastFirebaseStatusTime >= FIREBASE_STATUS_INTERVAL && firebaseReady) {
+    uploadSystemStatus();
+    lastFirebaseStatusTime = currentTime;
+  }
+  
+  // Print stats every 5 seconds
   if (currentTime - lastStatsTime >= 5000) {
     sendStatsToRaspberryPi();
     lastStatsTime = currentTime;
@@ -236,77 +252,47 @@ void setupWiFi() {
   }
 }
 
-// ==================== MQTT SETUP ====================
-void setupMQTT() {
-  String mqttServer = credManager.getMQTTServer();
-  if (mqttServer.length() == 0) {
-    Serial.println("⚠️  No MQTT server configured");
+// ==================== FIREBASE SETUP ====================
+void setupFirebase() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("⚠️  Cannot setup Firebase - No WiFi connection");
     return;
   }
   
-  mqttClient.setServer(mqttServer.c_str(), 1883);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setBufferSize(1024);
+  Serial.println("Setting up Firebase...");
   
-  reconnectMQTT();
-}
-
-void reconnectMQTT() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  // Configure Firebase
+  config.api_key = credManager.getAPIKey().c_str();
+  config.database_url = credManager.getDatabaseURL().c_str();
   
-  String mqttServer = credManager.getMQTTServer();
-  if (mqttServer.length() == 0) return;
+  // Sign in
+  auth.user.email = credManager.getUserEmail().c_str();
+  auth.user.password = credManager.getUserPassword().c_str();
   
+  // Assign callback function for token generation
+  config.token_status_callback = tokenStatusCallback;
+  
+  // Initialize Firebase
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+  
+  // Wait for token
+  Serial.print("Waiting for Firebase token");
   int attempts = 0;
-  while (!mqttClient.connected() && attempts < 3) {
-    Serial.print("Connecting to MQTT: ");
-    Serial.print(mqttServer);
-    Serial.print("...");
-    
-    String clientId = "ESP32_" + credManager.getVehicleID();
-    
-    if (mqttClient.connect(
-          clientId.c_str(),
-          credManager.getMQTTUser().c_str(),
-          credManager.getMQTTPassword().c_str())) {
-      
-      Serial.println("Connected!");
-      
-      // Subscribe to topic
-      String topic = credManager.getMQTTUser() + "/SDV";
-      mqttClient.subscribe(topic.c_str());
-      
-      Serial.print("Subscribed to: ");
-      Serial.println(topic);
-      
-    } else {
-      Serial.print("Failed (rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(")");
-      delay(2000);
-      attempts++;
-    }
+  while (!Firebase.ready() && attempts < 30) {
+    Serial.print(".");
+    delay(500);
+    attempts++;
   }
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  stats.mqttReceived++;
   
-  StaticJsonDocument<512> doc;
-  DeserializationError error = deserializeJson(doc, payload, length);
-  
-  if (error) return;
-  
-  const char* msgType = doc["type"];
-  if (msgType == NULL) return;
-  
-  if (strcmp(msgType, "signal") == 0) {
-    Serial.print("SIGNAL:");
-    Serial.print(doc["intersection_id"].as<const char*>());
-    Serial.print(",");
-    Serial.print(doc["current_phase"].as<uint8_t>());
-    Serial.print(",");
-    Serial.println(doc["time_remaining"].as<uint16_t>());
+  if (Firebase.ready()) {
+    Serial.println("\n✅ Firebase Connected!");
+    Serial.print("User UID: ");
+    Serial.println(auth.token.uid.c_str());
+    firebaseReady = true;
+  } else {
+    Serial.println("\n⚠️  Firebase connection failed");
+    firebaseReady = false;
   }
 }
 
@@ -356,7 +342,6 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len) {
         if (verifyChecksum((uint8_t*)bsm, sizeof(BSMMessage) - 34, bsm->checksum)) {
           processReceivedBSM(bsm);
           stats.bsmReceived++;
-          publishBSMToMQTT(bsm);
         }
       }
       break;
@@ -411,47 +396,66 @@ void sendBSM() {
   stats.bsmSent++;
 }
 
-void sendV2IData() {
-  if (!mqttClient.connected()) return;
+// ==================== FIREBASE UPLOAD - REAL-TIME ====================
+void uploadBSMToFirebase() {
+  if (!firebaseReady) return;
   
-  StaticJsonDocument<512> doc;
-  doc["type"] = "status";
-  doc["vehicle_id"] = credManager.getVehicleID();
-  doc["timestamp"] = millis();
-  doc["latitude"] = vehicleState.latitude;
-  doc["longitude"] = vehicleState.longitude;
-  doc["speed"] = vehicleState.speed;
-  doc["nearby_vehicles"] = nearbyVehicleCount;
+  // Path: /v2x/bsm/{vehicleId}
+  String path = "/v2x/bsm/" + credManager.getVehicleID();
   
-  char jsonBuffer[512];
-  serializeJson(doc, jsonBuffer);
+  FirebaseJson json;
+  json.set("latitude", vehicleState.latitude);
+  json.set("longitude", vehicleState.longitude);
+  json.set("speed", vehicleState.speed);
+  json.set("heading", vehicleState.heading);
+  json.set("timestamp", (int)millis());
   
-  String topic = credManager.getMQTTUser() + "/SDV";
-  if (mqttClient.publish(topic.c_str(), jsonBuffer)) {
-    stats.mqttPublished++;
+  // Use updateNodeSilent for faster non-blocking updates
+  if (Firebase.RTDB.updateNodeSilent(&fbdo, path.c_str(), &json)) {
+    stats.firebaseUploads++;
+  } else {
+    stats.firebaseErrors++;
   }
 }
 
-void publishBSMToMQTT(BSMMessage* msg) {
-  if (!mqttClient.connected()) return;
+void uploadTelemetryToFirebase() {
+  if (!firebaseReady) return;
   
-  String myVehicleId = credManager.getVehicleID();
-  if (strcmp(msg->vehicleId, myVehicleId.c_str()) == 0) return;
+  // Path: /telemetry/{vehicleId}
+  String path = "/telemetry/" + credManager.getVehicleID();
   
-  StaticJsonDocument<384> doc;
-  doc["type"] = "bsm";
-  doc["vehicle_id"] = msg->vehicleId;
-  doc["timestamp"] = msg->timestamp;
-  doc["latitude"] = msg->latitude;
-  doc["longitude"] = msg->longitude;
-  doc["speed"] = msg->speed;
+  FirebaseJson json;
+  json.set("battery_level", vehicleState.batteryLevel);
   
-  char jsonBuffer[384];
-  serializeJson(doc, jsonBuffer);
+  FirebaseJson location;
+  location.set("latitude", vehicleState.latitude);
+  location.set("longitude", vehicleState.longitude);
+  json.set("location", location);
   
-  String topic = credManager.getMQTTUser() + "/SDV";
-  if (mqttClient.publish(topic.c_str(), jsonBuffer)) {
-    stats.mqttPublished++;
+  json.set("speed", vehicleState.speed);
+  json.set("timestamp", (int)millis());
+  
+  if (Firebase.RTDB.updateNodeSilent(&fbdo, path.c_str(), &json)) {
+    stats.firebaseUploads++;
+  } else {
+    stats.firebaseErrors++;
+  }
+}
+
+void uploadSystemStatus() {
+  if (!firebaseReady) return;
+  
+  // Path: /system_status/{vehicleId}
+  String path = "/system_status/" + credManager.getVehicleID();
+  
+  FirebaseJson json;
+  json.set("online", true);
+  json.set("last_seen", (int)millis());
+  
+  if (Firebase.RTDB.updateNodeSilent(&fbdo, path.c_str(), &json)) {
+    stats.firebaseUploads++;
+  } else {
+    stats.firebaseErrors++;
   }
 }
 
@@ -557,6 +561,13 @@ void updateVehicleState() {
   simSpeed += random(-5, 6) / 100.0;
   simSpeed = constrain(simSpeed, 0.0, 30.0);
   vehicleState.speed = simSpeed;
+  
+  // Simulate battery drain
+  static unsigned long lastBatteryUpdate = 0;
+  if (millis() - lastBatteryUpdate > 60000) {
+    vehicleState.batteryLevel = max(0, vehicleState.batteryLevel - 1);
+    lastBatteryUpdate = millis();
+  }
 }
 
 void serialCommandHandler() {
@@ -577,9 +588,10 @@ void sendStatsToRaspberryPi() {
   Serial.print("BSM Received: "); Serial.println(stats.bsmReceived);
   Serial.print("Hazards: "); Serial.println(stats.hazardReceived);
   Serial.print("Emergencies: "); Serial.println(stats.emergencyReceived);
-  Serial.print("MQTT Published: "); Serial.println(stats.mqttPublished);
-  Serial.print("MQTT Received: "); Serial.println(stats.mqttReceived);
+  Serial.print("Firebase Uploads: "); Serial.println(stats.firebaseUploads);
+  Serial.print("Firebase Errors: "); Serial.println(stats.firebaseErrors);
+  Serial.print("Upload Rate: "); Serial.print(stats.firebaseUploads / (millis() / 1000.0)); Serial.println(" msg/s");
   Serial.print("Nearby Vehicles: "); Serial.println(nearbyVehicleCount);
-  Serial.print("MQTT: "); Serial.println(mqttClient.connected() ? "✓" : "✗");
+  Serial.print("Firebase: "); Serial.println(firebaseReady ? "✓" : "✗");
   Serial.println("===================\n");
 }
