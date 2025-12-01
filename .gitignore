@@ -11,3 +11,4 @@ backup/setup_*
 *.credentials
 .env.local
 secrets.*
+sdv_build/2025-11-24-raspios-trixie-arm64-lite.img
