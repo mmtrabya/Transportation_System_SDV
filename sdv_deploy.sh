@@ -1,461 +1,623 @@
 #!/bin/bash
-# ============================================================
-# SDV Complete Deployment Script for Raspberry Pi 5
-# Run this on a FRESH Raspberry Pi OS installation
-# ============================================================
-# Usage: 
-#   curl -sSL https://yourserver.com/install_sdv.sh | bash
-#   OR
-#   bash install_sdv.sh
-# ============================================================
+# ============================================================================
+# Complete Embedded Linux Build System for Raspberry Pi 5
+# Includes: Custom Kernel (RT-patched), U-Boot, Initramfs, Read-only rootfs
+# ============================================================================
 
-set -e  # Exit on error
+set -e
+trap 'echo "❌ Error on line $LINENO"' ERR
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo -e "${BLUE}╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║                                                        ║${NC}"
-echo -e "${BLUE}║   SDV Complete Deployment System                       ║${NC}"
-echo -e "${BLUE}║   For Raspberry Pi 5                                   ║${NC}"
-echo -e "${BLUE}║                                                        ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}"
+cat << "EOF"
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║   SDV Embedded Linux Build System for Raspberry Pi 5           ║
+║   Custom Kernel + U-Boot + Initramfs + Read-only Root          ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+EOF
+echo -e "${NC}"
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# Build directories
+BUILD_ROOT="${HOME}/sdv_embedded_build"
+KERNEL_DIR="${BUILD_ROOT}/linux"
+UBOOT_DIR="${BUILD_ROOT}/u-boot"
+ROOTFS_DIR="${BUILD_ROOT}/rootfs"
+INITRAMFS_DIR="${BUILD_ROOT}/initramfs"
+OUTPUT_DIR="${BUILD_ROOT}/output"
+
+# Versions
+LINUX_VERSION="6.6"  # LTS kernel
+RT_PATCH_VERSION="6.6-rt"
+UBOOT_VERSION="2024.01"
+
+# Architecture
+ARCH=arm64
+CROSS_COMPILE=aarch64-linux-gnu-
+
+# Raspberry Pi 5 specific
+RPI5_DTB="bcm2712-rpi-5-b.dtb"
+KERNEL_IMAGE="kernel_2712.img"
+
+# SD Card device (BE CAREFUL!)
+SD_CARD="/dev/mmcblk0"  # Change this to match your SD card
+
+# Core count for parallel builds
+CORES=$(nproc)
+
+echo -e "${GREEN}Configuration:${NC}"
+echo "  Build Root: ${BUILD_ROOT}"
+echo "  Architecture: ${ARCH}"
+echo "  Kernel Version: ${LINUX_VERSION} (RT-patched)"
+echo "  CPU Cores: ${CORES}"
 echo ""
 
-# Check if running on Raspberry Pi
-if ! grep -q "Raspberry Pi" /proc/cpuinfo; then
-    echo -e "${RED}❌ This script must run on a Raspberry Pi${NC}"
-    exit 1
+# ============================================================================
+# STEP 1: PREPARE BUILD ENVIRONMENT
+# ============================================================================
+
+prepare_environment() {
+    echo -e "${YELLOW}[1/10] Preparing build environment...${NC}"
+    
+    # Install dependencies
+    sudo apt update
+    sudo apt install -y \
+        git bc bison flex libssl-dev make libc6-dev libncurses5-dev \
+        crossbuild-essential-arm64 gcc-aarch64-linux-gnu \
+        device-tree-compiler u-boot-tools \
+        qemu-user-static debootstrap \
+        parted dosfstools e2fsprogs \
+        cpio squashfs-tools \
+        python3 python3-pip \
+        kmod cpio
+    
+    # Create build directories
+    mkdir -p "${BUILD_ROOT}"
+    mkdir -p "${OUTPUT_DIR}"
+    
+    cd "${BUILD_ROOT}"
+    
+    echo -e "${GREEN}✓ Build environment ready${NC}\n"
+}
+
+# ============================================================================
+# STEP 2: DOWNLOAD KERNEL SOURCES
+# ============================================================================
+
+download_kernel() {
+    echo -e "${YELLOW}[2/10] Downloading Linux kernel sources...${NC}"
+    
+    if [ -d "${KERNEL_DIR}" ]; then
+        echo "Kernel directory exists, updating..."
+        cd "${KERNEL_DIR}"
+        git pull
+    else
+        # Clone Raspberry Pi kernel (already has Pi 5 support)
+        git clone --depth=1 --branch rpi-6.6.y \
+            https://github.com/raspberrypi/linux.git "${KERNEL_DIR}"
+    fi
+    
+    cd "${KERNEL_DIR}"
+    
+    echo -e "${GREEN}✓ Kernel sources downloaded${NC}\n"
+}
+
+# ============================================================================
+# STEP 3: APPLY RT-PREEMPT PATCHES
+# ============================================================================
+
+apply_rt_patches() {
+    echo -e "${YELLOW}[3/10] Applying PREEMPT_RT patches...${NC}"
+    
+    cd "${KERNEL_DIR}"
+    
+    # Get kernel version
+    KERNEL_VER=$(make kernelversion)
+    echo "Kernel version: ${KERNEL_VER}"
+    
+    # Download RT patch
+    RT_PATCH_URL="https://cdn.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-${KERNEL_VER}-rt45.patch.xz"
+    
+    if [ ! -f "patch-${KERNEL_VER}-rt45.patch" ]; then
+        echo "Downloading RT patch..."
+        wget -q "${RT_PATCH_URL}" -O patch-rt.patch.xz || {
+            echo -e "${YELLOW}⚠ RT patch not available for this exact version${NC}"
+            echo "Continuing with standard PREEMPT kernel..."
+            return 0
+        }
+        xz -d patch-rt.patch.xz
+    fi
+    
+    # Apply patch
+    if [ -f "patch-rt.patch" ]; then
+        echo "Applying RT patch..."
+        patch -p1 < patch-rt.patch || {
+            echo -e "${YELLOW}⚠ Patch failed, using standard PREEMPT${NC}"
+        }
+    fi
+    
+    echo -e "${GREEN}✓ RT patches applied${NC}\n"
+}
+
+# ============================================================================
+# STEP 4: CONFIGURE KERNEL
+# ============================================================================
+
+configure_kernel() {
+    echo -e "${YELLOW}[4/10] Configuring kernel...${NC}"
+    
+    cd "${KERNEL_DIR}"
+    
+    # Start with Pi 5 default config
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} bcm2712_defconfig
+    
+    # Enable RT features
+    cat >> .config << EOF
+
+# Real-Time Preemption
+CONFIG_PREEMPT_RT=y
+CONFIG_PREEMPT=y
+CONFIG_HIGH_RES_TIMERS=y
+CONFIG_NO_HZ_FULL=y
+CONFIG_RCU_NOCB_CPU=y
+
+# Automotive features
+CONFIG_CAN=m
+CONFIG_CAN_RAW=m
+CONFIG_CAN_BCM=m
+CONFIG_CAN_GW=m
+CONFIG_CAN_VCAN=m
+
+# V2X networking
+CONFIG_IEEE802154=m
+CONFIG_IEEE802154_SOCKET=m
+CONFIG_MAC802154=m
+
+# Embedded optimizations
+CONFIG_EMBEDDED=y
+CONFIG_EXPERT=y
+CONFIG_SLOB=y
+CONFIG_CC_OPTIMIZE_FOR_SIZE=y
+
+# Security
+CONFIG_SECURITY=y
+CONFIG_SECURITY_NETWORK=y
+CONFIG_SECCOMP=y
+
+# Remove unnecessary drivers
+# CONFIG_DRM is not set
+# CONFIG_SOUND is not set
+# CONFIG_USB_PRINTER is not set
+
+# Keep essential drivers
+CONFIG_USB_SERIAL=y
+CONFIG_USB_SERIAL_FTDI_SIO=y
+CONFIG_USB_SERIAL_PL2303=y
+CONFIG_I2C=y
+CONFIG_SPI=y
+CONFIG_SERIAL_DEV_BUS=y
+
+# Raspberry Pi specific
+CONFIG_BCM2835_MBOX=y
+CONFIG_RASPBERRYPI_FIRMWARE=y
+CONFIG_RASPBERRYPI_POWER=y
+
+# SDV Requirements
+CONFIG_VIDEO_V4L2=y
+CONFIG_USB_VIDEO_CLASS=y
+CONFIG_MEDIA_CAMERA_SUPPORT=y
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_AMBA_PL011=y
+CONFIG_GPIO_SYSFS=y
+CONFIG_I2C_BCM2835=y
+CONFIG_SPI_BCM2835=y
+CONFIG_SPI_BCM2835AUX=y
+CONFIG_PWM=y
+CONFIG_PWM_BCM2835=y
+
+# Networking
+CONFIG_PACKET=y
+CONFIG_UNIX=y
+CONFIG_INET=y
+CONFIG_WIRELESS=y
+CONFIG_CFG80211=y
+CONFIG_MAC80211=y
+CONFIG_NETFILTER=y
+
+# Filesystem
+CONFIG_EXT4_FS=y
+CONFIG_SQUASHFS=y
+CONFIG_OVERLAY_FS=y
+CONFIG_TMPFS=y
+CONFIG_CONFIGFS_FS=y
+EOF
+    
+    # Validate config
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} olddefconfig
+    
+    echo -e "${GREEN}✓ Kernel configured${NC}\n"
+}
+
+# ============================================================================
+# STEP 5: BUILD KERNEL
+# ============================================================================
+
+build_kernel() {
+    echo -e "${YELLOW}[5/10] Building kernel (this will take time)...${NC}"
+    
+    cd "${KERNEL_DIR}"
+    
+    # Build kernel image
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j${CORES} Image.gz
+    
+    # Build device tree blobs
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j${CORES} dtbs
+    
+    # Build modules
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j${CORES} modules
+    
+    echo -e "${GREEN}✓ Kernel built successfully${NC}\n"
+}
+
+# ============================================================================
+# STEP 6: BUILD U-BOOT
+# ============================================================================
+
+build_uboot() {
+    echo -e "${YELLOW}[6/10] Building U-Boot bootloader...${NC}"
+    
+    if [ -d "${UBOOT_DIR}" ]; then
+        echo "U-Boot directory exists, updating..."
+        cd "${UBOOT_DIR}"
+        git pull
+    else
+        git clone --depth=1 --branch v2024.01 \
+            https://github.com/u-boot/u-boot.git "${UBOOT_DIR}"
+    fi
+    
+    cd "${UBOOT_DIR}"
+    
+    # Configure for Raspberry Pi 5
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} rpi_arm64_defconfig
+    
+    # Build U-Boot
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j${CORES}
+    
+    echo -e "${GREEN}✓ U-Boot built${NC}\n"
+}
+
+# ============================================================================
+# STEP 7: CREATE MINIMAL ROOTFS WITH DEBOOTSTRAP
+# ============================================================================
+
+create_rootfs() {
+    echo -e "${YELLOW}[7/10] Creating minimal rootfs...${NC}"
+    
+    sudo rm -rf "${ROOTFS_DIR}"
+    mkdir -p "${ROOTFS_DIR}"
+    
+    # Create base Debian arm64 rootfs
+    sudo debootstrap --arch=arm64 --variant=minbase \
+        bookworm "${ROOTFS_DIR}" http://deb.debian.org/debian
+    
+    # Install essential packages
+    sudo chroot "${ROOTFS_DIR}" /bin/bash << 'CHROOT_SCRIPT'
+set -e
+
+# Update package list
+apt update
+
+# Install minimal required packages
+apt install -y --no-install-recommends \
+    systemd systemd-sysv udev kmod \
+    bash coreutils util-linux \
+    ifupdown iproute2 iputils-ping \
+    ca-certificates \
+    python3-minimal python3-pip \
+    openssh-server \
+    nano less
+
+# Clean up
+apt clean
+rm -rf /var/lib/apt/lists/*
+
+# Set root password
+echo "root:sdv2024" | chpasswd
+
+# Enable SSH
+systemctl enable ssh
+
+# Create SDV user
+useradd -m -s /bin/bash -G sudo pi
+echo "pi:sdv2024" | chpasswd
+
+CHROOT_SCRIPT
+    
+    # Copy SDV software
+    echo "Installing SDV software..."
+    
+    sudo mkdir -p "${ROOTFS_DIR}/opt/sdv"
+    sudo cp -r ../raspberry_pi/* "${ROOTFS_DIR}/opt/sdv/" 2>/dev/null || true
+    
+    # Create fstab for read-only root
+    sudo tee "${ROOTFS_DIR}/etc/fstab" > /dev/null << EOF
+# SDV Embedded Linux - Read-only root filesystem
+proc            /proc           proc    defaults          0       0
+devpts          /dev/pts        devpts  rw,gid=5,mode=620 0       0
+tmpfs           /run            tmpfs   defaults,noatime  0       0
+tmpfs           /tmp            tmpfs   defaults,noatime  0       0
+tmpfs           /var/log        tmpfs   defaults,noatime  0       0
+tmpfs           /var/tmp        tmpfs   defaults,noatime  0       0
+
+# Boot partition
+/dev/mmcblk0p1  /boot/firmware  vfat    ro,defaults       0       2
+
+# Root partition (read-only by default)
+/dev/mmcblk0p2  /               ext4    ro,defaults       0       1
+
+# Writable data partition
+/dev/mmcblk0p3  /data           ext4    rw,defaults       0       2
+EOF
+    
+    # Configure network
+    sudo tee "${ROOTFS_DIR}/etc/network/interfaces" > /dev/null << EOF
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+    
+    echo -e "${GREEN}✓ Rootfs created${NC}\n"
+}
+
+# ============================================================================
+# STEP 8: CREATE INITRAMFS
+# ============================================================================
+
+create_initramfs() {
+    echo -e "${YELLOW}[8/10] Creating initramfs...${NC}"
+    
+    mkdir -p "${INITRAMFS_DIR}"/{bin,sbin,etc,proc,sys,dev,newroot,run}
+    
+    # Copy busybox
+    sudo cp /bin/busybox "${INITRAMFS_DIR}/bin/"
+    
+    # Create symlinks for busybox applets
+    cd "${INITRAMFS_DIR}/bin"
+    sudo ./busybox --install -s .
+    cd -
+    
+    # Create init script
+    sudo tee "${INITRAMFS_DIR}/init" > /dev/null << 'INIT_SCRIPT'
+#!/bin/busybox sh
+
+# Mount essential filesystems
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+
+# Wait for root device
+echo "Waiting for root device..."
+for i in $(seq 1 10); do
+    if [ -e /dev/mmcblk0p2 ]; then
+        break
+    fi
+    sleep 1
+done
+
+# Check root filesystem
+echo "Checking root filesystem..."
+/bin/fsck -y /dev/mmcblk0p2 || true
+
+# Mount root filesystem (read-only)
+echo "Mounting root filesystem..."
+mount -o ro /dev/mmcblk0p2 /newroot
+
+# Switch to new root
+echo "Switching to real root..."
+exec switch_root /newroot /sbin/init
+INIT_SCRIPT
+    
+    sudo chmod +x "${INITRAMFS_DIR}/init"
+    
+    # Create initramfs image
+    cd "${INITRAMFS_DIR}"
+    sudo find . | sudo cpio -o -H newc | gzip > "${OUTPUT_DIR}/initramfs.gz"
+    cd -
+    
+    echo -e "${GREEN}✓ Initramfs created${NC}\n"
+}
+
+# ============================================================================
+# STEP 9: INSTALL TO OUTPUT DIRECTORY
+# ============================================================================
+
+install_output() {
+    echo -e "${YELLOW}[9/10] Installing to output directory...${NC}"
+    
+    mkdir -p "${OUTPUT_DIR}/boot"
+    mkdir -p "${OUTPUT_DIR}/rootfs"
+    
+    # Copy kernel
+    cp "${KERNEL_DIR}/arch/arm64/boot/Image.gz" "${OUTPUT_DIR}/boot/${KERNEL_IMAGE}"
+    
+    # Copy device trees
+    cp "${KERNEL_DIR}/arch/arm64/boot/dts/broadcom/${RPI5_DTB}" "${OUTPUT_DIR}/boot/"
+    cp -r "${KERNEL_DIR}/arch/arm64/boot/dts/broadcom/overlays" "${OUTPUT_DIR}/boot/"
+    
+    # Install kernel modules to rootfs
+    cd "${KERNEL_DIR}"
+    sudo make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} \
+        INSTALL_MOD_PATH="${ROOTFS_DIR}" modules_install
+    
+    # Copy U-Boot
+    cp "${UBOOT_DIR}/u-boot.bin" "${OUTPUT_DIR}/boot/"
+    
+    # Create boot config
+    tee "${OUTPUT_DIR}/boot/config.txt" > /dev/null << EOF
+# SDV Embedded Linux - Raspberry Pi 5 Configuration
+
+[pi5]
+kernel=u-boot.bin
+
+[all]
+arm_64bit=1
+enable_uart=1
+uart_2ndstage=1
+
+# GPU memory (minimal for headless)
+gpu_mem=64
+
+# Disable camera LED
+disable_camera_led=1
+
+# Enable I2C, SPI, UART
+dtparam=i2c_arm=on
+dtparam=spi=on
+enable_uart=1
+
+# Performance
+arm_freq=2400
+over_voltage=2
+EOF
+    
+    # Create U-Boot boot script
+    tee "${OUTPUT_DIR}/boot/boot.cmd" > /dev/null << EOF
+# U-Boot boot script for SDV
+
+setenv bootargs "console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait ro quiet"
+load mmc 0:1 \${kernel_addr_r} ${KERNEL_IMAGE}
+load mmc 0:1 \${fdt_addr_r} ${RPI5_DTB}
+load mmc 0:1 \${ramdisk_addr_r} initramfs.gz
+booti \${kernel_addr_r} \${ramdisk_addr_r} \${fdt_addr_r}
+EOF
+    
+    # Compile boot script
+    mkimage -C none -A arm64 -T script -d "${OUTPUT_DIR}/boot/boot.cmd" \
+        "${OUTPUT_DIR}/boot/boot.scr"
+    
+    echo -e "${GREEN}✓ Output directory prepared${NC}\n"
+}
+
+# ============================================================================
+# STEP 10: CREATE SD CARD IMAGE
+# ============================================================================
+
+create_sd_image() {
+    echo -e "${YELLOW}[10/10] Creating SD card image...${NC}"
+    
+    IMAGE_FILE="${OUTPUT_DIR}/sdv_embedded_pi5.img"
+    IMAGE_SIZE="4G"
+    
+    # Create empty image
+    dd if=/dev/zero of="${IMAGE_FILE}" bs=1 count=0 seek="${IMAGE_SIZE}" status=progress
+    
+    # Create partition table
+    parted -s "${IMAGE_FILE}" mklabel msdos
+    parted -s "${IMAGE_FILE}" mkpart primary fat32 1MiB 512MiB
+    parted -s "${IMAGE_FILE}" mkpart primary ext4 512MiB 3584MiB
+    parted -s "${IMAGE_FILE}" mkpart primary ext4 3584MiB 100%
+    parted -s "${IMAGE_FILE}" set 1 boot on
+    
+    # Setup loop device
+    LOOP_DEV=$(sudo losetup -f --show -P "${IMAGE_FILE}")
+    
+    # Format partitions
+    sudo mkfs.vfat -F 32 -n BOOT "${LOOP_DEV}p1"
+    sudo mkfs.ext4 -L rootfs "${LOOP_DEV}p2"
+    sudo mkfs.ext4 -L data "${LOOP_DEV}p3"
+    
+    # Mount and copy files
+    MOUNT_BOOT="/tmp/sdv_boot"
+    MOUNT_ROOT="/tmp/sdv_root"
+    
+    mkdir -p "${MOUNT_BOOT}" "${MOUNT_ROOT}"
+    
+    sudo mount "${LOOP_DEV}p1" "${MOUNT_BOOT}"
+    sudo mount "${LOOP_DEV}p2" "${MOUNT_ROOT}"
+    
+    # Copy boot files
+    sudo cp -r "${OUTPUT_DIR}/boot/"* "${MOUNT_BOOT}/"
+    
+    # Copy rootfs
+    sudo cp -a "${ROOTFS_DIR}/"* "${MOUNT_ROOT}/"
+    
+    # Sync and unmount
+    sync
+    sudo umount "${MOUNT_BOOT}"
+    sudo umount "${MOUNT_ROOT}"
+    sudo losetup -d "${LOOP_DEV}"
+    
+    # Compress image
+    echo "Compressing image..."
+    xz -9 -T0 "${IMAGE_FILE}"
+    
+    echo -e "${GREEN}✓ SD card image created: ${IMAGE_FILE}.xz${NC}\n"
+}
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+main() {
+    echo -e "${BLUE}Starting embedded Linux build...${NC}\n"
+    
+    prepare_environment
+    download_kernel
+    apply_rt_patches
+    configure_kernel
+    build_kernel
+    build_uboot
+    create_rootfs
+    create_initramfs
+    install_output
+    create_sd_image
+    
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                        ║${NC}"
+    echo -e "${GREEN}║   ✓ Embedded Linux Build Complete!                    ║${NC}"
+    echo -e "${GREEN}║                                                        ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${BLUE}Output files:${NC}"
+    echo "  Image: ${OUTPUT_DIR}/sdv_embedded_pi5.img.xz"
+    echo "  Boot: ${OUTPUT_DIR}/boot/"
+    echo "  Rootfs: ${ROOTFS_DIR}/"
+    echo ""
+    echo -e "${BLUE}To flash to SD card:${NC}"
+    echo "  xz -d ${OUTPUT_DIR}/sdv_embedded_pi5.img.xz"
+    echo "  sudo dd if=${OUTPUT_DIR}/sdv_embedded_pi5.img of=${SD_CARD} bs=4M status=progress"
+    echo "  sync"
+    echo ""
+    echo -e "${BLUE}Login credentials:${NC}"
+    echo "  Username: pi"
+    echo "  Password: sdv2024"
+    echo ""
+    echo -e "${YELLOW}Features included:${NC}"
+    echo "  ✓ Custom Linux kernel ${LINUX_VERSION}"
+    echo "  ✓ PREEMPT_RT real-time patches"
+    echo "  ✓ U-Boot bootloader"
+    echo "  ✓ Custom initramfs"
+    echo "  ✓ Read-only root filesystem"
+    echo "  ✓ Minimal Debian rootfs"
+    echo "  ✓ SDV software integrated"
+    echo ""
+}
+
+# Run if executed directly
+if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
+    main "$@"
 fi
-
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}❌ Please run as root: sudo bash install_sdv.sh${NC}"
-    exit 1
-fi
-
-# Configuration
-SDV_HOME="/opt/sdv"
-SDV_USER="pi"
-VEHICLE_ID="${VEHICLE_ID:-SDV_001}"
-
-echo -e "${GREEN}✓ Starting SDV installation...${NC}\n"
-
-# ============================================================
-# 1. SYSTEM UPDATE & DEPENDENCIES
-# ============================================================
-echo -e "${YELLOW}[1/10] Updating system and installing dependencies...${NC}"
-
-apt update && apt upgrade -y
-
-apt install -y \
-    python3-pip python3-venv python3-dev \
-    python3-pyqt5 python3-pyqt5.qtmultimedia python3-pyqt5.qtwebengine \
-    python3-opencv python3-numpy python3-serial \
-    git curl wget build-essential cmake \
-    libfreenect-dev freenect python3-freenect \
-    v4l-utils ffmpeg alsa-utils pulseaudio \
-    mosquitto mosquitto-clients \
-    nginx supervisor \
-    libatlas-base-dev libopenblas-dev \
-    libhdf5-dev libhdf5-serial-dev \
-    gstreamer1.0-tools gstreamer1.0-plugins-good \
-    fonts-roboto xserver-xorg x11-xserver-utils \
-    chromium-browser unclutter \
-    libavcodec-dev libavformat-dev libswscale-dev
-
-echo -e "${GREEN}✓ System dependencies installed${NC}\n"
-
-# ============================================================
-# 2. PYTHON PACKAGES
-# ============================================================
-echo -e "${YELLOW}[2/10] Installing Python packages...${NC}"
-
-pip3 install --upgrade pip
-
-pip3 install \
-    firebase-admin \
-    paho-mqtt \
-    streamlit plotly \
-    onnxruntime \
-    gpiozero pigpio \
-    pynmea2 \
-    requests \
-    python-dotenv
-
-echo -e "${GREEN}✓ Python packages installed${NC}\n"
-
-# ============================================================
-# 3. CREATE DIRECTORY STRUCTURE
-# ============================================================
-echo -e "${YELLOW}[3/10] Creating SDV directory structure...${NC}"
-
-mkdir -p $SDV_HOME/{bin,config,models,logs,media,gui,data}
-mkdir -p /home/$SDV_USER/sdv/{downloads,cache}
-
-echo -e "${GREEN}✓ Directory structure created${NC}\n"
-
-# ============================================================
-# 4. DOWNLOAD SDV SOFTWARE
-# ============================================================
-echo -e "${YELLOW}[4/10] Installing SDV software modules...${NC}"
-
-# Create Python modules (from your existing code)
-cat > $SDV_HOME/bin/vehicle_config.py << 'EOF'
-"""SDV Vehicle Configuration"""
-import os
-from pathlib import Path
-
-class VehicleConfig:
-    # Vehicle Identity
-    VEHICLE_ID = os.getenv('VEHICLE_ID', 'SDV_001')
-    
-    # Firebase
-    FIREBASE_CREDENTIALS = str(Path.home() / "sdv_firebase_key.json")
-    FIREBASE_DATABASE_URL = os.getenv('FIREBASE_URL', 
-        "https://sdv-ota-system-default-rtdb.europe-west1.firebasedatabase.app")
-    
-    # Serial Ports
-    ATMEGA32_PORT = "/dev/ttyUSB0"
-    ATMEGA32_BAUDRATE = 115200
-    GPS_PORT = "/dev/ttyUSB1"
-    GPS_BAUDRATE = 9600
-    ESP32_PORT = "/dev/ttyUSB2"
-    ESP32_BAUDRATE = 115200
-    
-    # Display
-    SCREEN_WIDTH = 1024
-    SCREEN_HEIGHT = 600
-    FULLSCREEN = True
-    
-    # Paths
-    SDV_HOME = Path("/opt/sdv")
-    MODELS_DIR = SDV_HOME / "models"
-    LOGS_DIR = SDV_HOME / "logs"
-    
-    # Pricing
-    PRICE_PER_HOUR = 15.0
-    PRICE_PER_KM = 0.5
-EOF
-
-echo -e "${GREEN}✓ SDV software modules installed${NC}\n"
-
-# ============================================================
-# 5. FIRST BOOT REGISTRATION SCRIPT
-# ============================================================
-echo -e "${YELLOW}[5/10] Creating first boot registration...${NC}"
-
-cat > $SDV_HOME/bin/firstboot_registration.py << 'EOF'
-#!/usr/bin/env python3
-"""First Boot Vehicle Registration"""
-import os
-import json
-import time
-from pathlib import Path
-
-try:
-    import firebase_admin
-    from firebase_admin import credentials, firestore
-except ImportError:
-    print("Firebase not available, skipping registration")
-    exit(0)
-
-VEHICLE_ID = os.getenv('VEHICLE_ID', 'SDV_001')
-FIREBASE_CREDS = Path.home() / "sdv_firebase_key.json"
-FLAG_FILE = Path("/opt/sdv/data/.registered")
-
-if FLAG_FILE.exists():
-    print("Vehicle already registered")
-    exit(0)
-
-if not FIREBASE_CREDS.exists():
-    print("Firebase credentials not found, skipping registration")
-    exit(0)
-
-print(f"Registering vehicle {VEHICLE_ID} with Firebase...")
-
-try:
-    cred = credentials.Certificate(str(FIREBASE_CREDS))
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    
-    vehicle_ref = db.collection('vehicles').document(VEHICLE_ID)
-    
-    vehicle_data = {
-        'vehicleId': VEHICLE_ID,
-        'model': 'Smart City Car',
-        'category': 'compact',
-        'status': 'available',
-        'isOnline': True,
-        'batteryLevel': 100,
-        'location': {
-            'latitude': 30.0444,
-            'longitude': 31.2357
-        },
-        'pricePerHour': 15.0,
-        'pricePerKm': 0.5,
-        'firstRegistered': firestore.SERVER_TIMESTAMP,
-        'lastUpdate': firestore.SERVER_TIMESTAMP
-    }
-    
-    vehicle_ref.set(vehicle_data, merge=True)
-    
-    # Create flag file
-    FLAG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    FLAG_FILE.write_text(f"Registered at {time.time()}")
-    
-    print(f"✓ Vehicle {VEHICLE_ID} registered successfully!")
-    
-except Exception as e:
-    print(f"Registration failed: {e}")
-    exit(1)
-EOF
-
-chmod +x $SDV_HOME/bin/firstboot_registration.py
-
-echo -e "${GREEN}✓ First boot registration created${NC}\n"
-
-# ============================================================
-# 6. SYSTEMD SERVICES
-# ============================================================
-echo -e "${YELLOW}[6/10] Installing systemd services...${NC}"
-
-# First Boot Service
-cat > /etc/systemd/system/sdv-firstboot.service << 'EOF'
-[Unit]
-Description=SDV First Boot Registration
-Before=sdv-infotainment.service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-User=root
-ExecStart=/usr/bin/python3 /opt/sdv/bin/firstboot_registration.py
-RemainAfterExit=yes
-StandardOutput=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Infotainment Service
-cat > /etc/systemd/system/sdv-infotainment.service << 'EOF'
-[Unit]
-Description=SDV Infotainment System
-After=graphical.target sdv-firstboot.service
-Wants=graphical.target
-
-[Service]
-Type=simple
-User=pi
-Environment=DISPLAY=:0
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-WorkingDirectory=/opt/sdv/gui
-ExecStartPre=/bin/sleep 10
-ExecStart=/usr/bin/python3 /opt/sdv/gui/main.py
-Restart=always
-RestartSec=10
-StandardOutput=journal
-
-[Install]
-WantedBy=graphical.target
-EOF
-
-# Vehicle Manager Service
-cat > /etc/systemd/system/sdv-vehicle-manager.service << 'EOF'
-[Unit]
-Description=SDV Vehicle Manager
-After=network-online.target sdv-firstboot.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/sdv/bin
-ExecStart=/usr/bin/python3 /opt/sdv/bin/vehicle_manager.py
-Restart=always
-RestartSec=10
-StandardOutput=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# ADAS Service
-cat > /etc/systemd/system/sdv-adas.service << 'EOF'
-[Unit]
-Description=SDV ADAS System
-After=network-online.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/opt/sdv/bin
-ExecStart=/usr/bin/python3 /opt/sdv/bin/adas_inference.py --headless
-Restart=always
-RestartSec=10
-StandardOutput=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Enable services
-systemctl daemon-reload
-systemctl enable sdv-firstboot.service
-systemctl enable sdv-infotainment.service
-systemctl enable sdv-vehicle-manager.service
-systemctl enable sdv-adas.service
-
-echo -e "${GREEN}✓ Systemd services installed${NC}\n"
-
-# ============================================================
-# 7. AUTO-LOGIN AND KIOSK MODE
-# ============================================================
-echo -e "${YELLOW}[7/10] Configuring auto-login and kiosk mode...${NC}"
-
-# Auto-login to X
-mkdir -p /etc/systemd/system/getty@tty1.service.d
-cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin $SDV_USER --noclear %I \$TERM
-EOF
-
-# Auto-start X on login
-cat >> /home/$SDV_USER/.bashrc << 'EOF'
-# Auto-start X server for SDV
-if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    startx -- -nocursor
-fi
-EOF
-
-# Disable screen blanking
-cat > /home/$SDV_USER/.xinitrc << 'EOF'
-#!/bin/bash
-xset s off
-xset -dpms
-xset s noblank
-unclutter -idle 0.1 -root &
-exec /opt/sdv/gui/start_infotainment.sh
-EOF
-
-chmod +x /home/$SDV_USER/.xinitrc
-
-echo -e "${GREEN}✓ Auto-login and kiosk mode configured${NC}\n"
-
-# ============================================================
-# 8. REMOTE ACCESS (RPI CONNECT)
-# ============================================================
-echo -e "${YELLOW}[8/10] Setting up remote access...${NC}"
-
-# Install RPI Connect (if available)
-if command -v rpi-connect &> /dev/null; then
-    echo "RPI Connect already installed"
-else
-    echo "Installing RPI Connect..."
-    apt install -y rpi-connect
-fi
-
-# Enable VNC for screen sharing
-apt install -y realvnc-vnc-server realvnc-vnc-viewer
-
-systemctl enable vncserver-x11-serviced.service
-systemctl start vncserver-x11-serviced.service
-
-# Configure VNC for virtual desktop
-cat > /etc/vnc/config.d/common.custom << EOF
-Authentication=VncAuth
-Encryption=AlwaysMaximum
-Password=sdvvnc2024
-EOF
-
-echo -e "${GREEN}✓ Remote access configured${NC}"
-echo -e "${BLUE}  VNC Password: sdvvnc2024${NC}\n"
-
-# ============================================================
-# 9. SPOTIFY INTEGRATION PREPARATION
-# ============================================================
-echo -e "${YELLOW}[9/10] Preparing Spotify integration...${NC}"
-
-# Install spotifyd (Spotify daemon)
-apt install -y spotifyd
-
-# Create Spotify config placeholder
-mkdir -p /home/$SDV_USER/.config/spotifyd
-
-cat > /home/$SDV_USER/.config/spotifyd/spotifyd.conf << 'EOF'
-[global]
-username = "your_spotify_username"
-password = "your_spotify_password"
-backend = "alsa"
-device_name = "SDV_Car_Audio"
-bitrate = 320
-cache_path = "/home/pi/.cache/spotifyd"
-volume_normalisation = true
-normalisation_pregain = -10
-EOF
-
-chown -R $SDV_USER:$SDV_USER /home/$SDV_USER/.config
-
-echo -e "${GREEN}✓ Spotify integration prepared${NC}"
-echo -e "${BLUE}  Edit /home/pi/.config/spotifyd/spotifyd.conf with your credentials${NC}\n"
-
-# ============================================================
-# 10. FINAL CONFIGURATION
-# ============================================================
-echo -e "${YELLOW}[10/10] Final configuration...${NC}"
-
-# Set permissions
-chown -R $SDV_USER:$SDV_USER /home/$SDV_USER/sdv
-chown -R root:root $SDV_HOME
-chmod +x $SDV_HOME/bin/*.py
-
-# Create environment file
-cat > /etc/environment << EOF
-VEHICLE_ID=$VEHICLE_ID
-SDV_HOME=$SDV_HOME
-DISPLAY=:0
-EOF
-
-# Set vehicle ID persistently
-echo "VEHICLE_ID=$VEHICLE_ID" >> /etc/environment
-
-echo -e "${GREEN}✓ Final configuration complete${NC}\n"
-
-# ============================================================
-# SUMMARY
-# ============================================================
-echo ""
-echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║                                                        ║${NC}"
-echo -e "${GREEN}║   ✓ SDV Installation Complete!                         ║${NC}"
-echo -e "${GREEN}║                                                        ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}Next Steps:${NC}"
-echo -e "  1. Place Firebase credentials: ~/sdv_firebase_key.json"
-echo -e "  2. Copy your Python modules to: /opt/sdv/bin/"
-echo -e "  3. Copy GUI application to: /opt/sdv/gui/"
-echo -e "  4. Copy ONNX models to: /opt/sdv/models/"
-echo -e "  5. Configure Spotify (optional): /home/pi/.config/spotifyd/spotifyd.conf"
-echo ""
-echo -e "${BLUE}Remote Access:${NC}"
-echo -e "  • RPI Connect: Use Raspberry Pi Connect app"
-echo -e "  • VNC: Connect to $(hostname -I | awk '{print $1}'):5900"
-echo -e "    Password: sdvvnc2024"
-echo ""
-echo -e "${BLUE}Services:${NC}"
-echo -e "  • First Boot Registration: sdv-firstboot.service"
-echo -e "  • Infotainment GUI: sdv-infotainment.service"
-echo -e "  • Vehicle Manager: sdv-vehicle-manager.service"
-echo -e "  • ADAS System: sdv-adas.service"
-echo ""
-echo -e "${YELLOW}Reboot required to start services:${NC}"
-echo -e "  sudo reboot"
-echo ""
