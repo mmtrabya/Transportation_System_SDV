@@ -280,7 +280,7 @@ class ONNXModel:
         """Preprocess image for model input"""
         img = cv2.resize(image, (self.input_width, self.input_height))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img.astype(np.float32) / 255.0
+        # img = img.astype(np.float32) / 255.0
         img = np.transpose(img, (2, 0, 1))
         img = np.expand_dims(img, axis=0)
         return img
@@ -317,38 +317,150 @@ class LaneDetector(ONNXModel):
     
     def postprocess(self, outputs: List[np.ndarray], original_image: np.ndarray) -> LaneResult:
         """Postprocess lane detection output"""
+        
+        def softmax(x, axis=1):
+            """Compute softmax values for numpy array along specified axis"""
+            # Subtract max for numerical stability
+            x_max = np.max(x, axis=axis, keepdims=True)
+            exp_x = np.exp(x - x_max)
+            return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
+
         output = outputs[0]
+    
+        seg_pred = softmax(output, axis=1)
+        seg_mask = np.argmax(seg_pred[0], axis=0)
         
-        # Get segmentation mask
-        if len(output.shape) == 4:  # [1, C, H, W]
-            # Get class predictions (argmax across channel dimension)
-            seg_mask = np.argmax(output[0], axis=0)
-            
-            # Resize to original image size
-            h, w = original_image.shape[:2]
-            seg_mask = cv2.resize(seg_mask.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST)
-            
-            # Extract lane points from segmentation
-            left_lane = self._extract_lane_from_mask(seg_mask, side='left')
-            right_lane = self._extract_lane_from_mask(seg_mask, side='right')
-            
-        elif len(output.shape) == 3:  # [1, num_points, 2]
-            points = output[0]
-            h, w = original_image.shape[:2]
-            points[:, 0] *= w
-            points[:, 1] *= h
-            mid = len(points) // 2
-            left_lane = points[:mid]
-            right_lane = points[mid:]
-            seg_mask = None
+        # Resize lane_result to match original image size
+        h, w = original_image.shape[:2]
+        seg_mask_resized = cv2.resize(seg_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+        
+        seg_mask_refined = self._refine_lane_mask(seg_mask_resized)
+
+        lane_departure = self._calculate_lane_departure(seg_mask_refined, original_image.shape)
+        
+        confidence = self._calculate_prediction_confidence(seg_mask)
+
+        return LaneResult(seg_mask_refined, lane_departure, confidence, seg_mask)
+    
+    def _calculate_prediction_confidence(self, lane_result: np.ndarray) -> float:
+        """
+        Calculate overall confidence for lane segmentation prediction
+        
+        Args:
+            lane_result: Segmentation mask with class predictions (H, W)
+        
+        Returns:
+            Confidence score between 0 and 1
+        """
+        h, w = lane_result.shape
+        total_pixels = h * w
+        
+        # 1. Coverage confidence (30% weight)
+        lane_pixels = np.sum(lane_result > 0)
+        coverage_ratio = lane_pixels / total_pixels
+        
+        # Typical lane coverage is 5-20% of image
+        if coverage_ratio < 0.02:
+            coverage_confidence = coverage_ratio / 0.02
+        elif coverage_ratio > 0.30:
+            coverage_confidence = max(0, 1.0 - (coverage_ratio - 0.30) / 0.30)
         else:
-            logger.warning(f"Unexpected lane detection output shape: {output.shape}")
-            return LaneResult(None, None, None, 0.0, 0.0, None)
+            coverage_confidence = 1.0
         
+        # 2. Spatial consistency confidence (40% weight)
+        lane_classes = np.unique(lane_result[lane_result > 0])
+        consistency_scores = []
+        
+        for class_id in lane_classes:
+            class_mask = (lane_result == class_id).astype(np.uint8)
+            num_components, labels, stats, _ = cv2.connectedComponentsWithStats(class_mask, connectivity=8)
+            
+            if num_components <= 1:
+                continue
+            
+            areas = [stats[i, cv2.CC_STAT_AREA] for i in range(1, num_components)]
+            if len(areas) == 0:
+                continue
+            
+            max_area = max(areas)
+            total_area = sum(areas)
+            dominance = max_area / total_area if total_area > 0 else 0
+            component_penalty = 1.0 / (1.0 + (num_components - 1) * 0.2)
+            
+            consistency_scores.append(dominance * component_penalty)
+        
+        spatial_consistency = np.mean(consistency_scores) if len(consistency_scores) > 0 else 0.0
+        
+        # 3. Geometry confidence (30% weight)
+        bottom_half = lane_result[h//2:, :]
+        top_half = lane_result[:h//2, :]
+        
+        bottom_pixels = np.sum(bottom_half > 0)
+        top_pixels = np.sum(top_half > 0)
+        
+        if bottom_pixels > 0:
+            ratio = bottom_pixels / (bottom_pixels + top_pixels + 1e-6)
+            if 0.5 <= ratio <= 0.9:
+                geometry_confidence = 1.0
+            else:
+                geometry_confidence = max(0, 1.0 - abs(ratio - 0.7) / 0.3)
+        else:
+            geometry_confidence = 0.0
+        
+        # Combined confidence
+        overall_confidence = (
+            0.3 * coverage_confidence +
+            0.4 * spatial_consistency +
+            0.3 * geometry_confidence
+        )
+        
+        return float(np.clip(overall_confidence, 0, 1))
+
+    def _calculate_lane_departure(self, lane_result: np.ndarray, image_shape: tuple) -> tuple:
+        """Calculate lane departure from segmentation mask"""
+        h, w = image_shape[:2]
+        
+        left_lane = None
+        right_lane = None
         lane_center = None
         lane_departure = 0.0
         
-        if left_lane is not None and right_lane is not None and len(left_lane) > 0 and len(right_lane) > 0:
+        # Extract lane boundaries from segmentation mask
+        # Scan from bottom to top to find left and right lane edges
+        bottom_half_start = h // 2  # Focus on bottom half of image
+        
+        left_points = []
+        right_points = []
+        image_center_x = w / 2
+        
+        # Scan each row from bottom to top
+        for y in range(h - 1, bottom_half_start, -5):  # Step by 5 for efficiency
+            row = lane_result[y, :]
+            lane_pixels = np.where(row > 0)[0]  # Find all lane pixels in this row
+            
+            if len(lane_pixels) == 0:
+                continue
+            
+            # Split pixels into left (< center) and right (> center)
+            left_pixels = lane_pixels[lane_pixels < image_center_x]
+            right_pixels = lane_pixels[lane_pixels > image_center_x]
+            
+            # Get rightmost left lane pixel and leftmost right lane pixel
+            if len(left_pixels) > 0:
+                left_points.append([left_pixels[-1], y])  # Rightmost left pixel
+            
+            if len(right_pixels) > 0:
+                right_points.append([right_pixels[0], y])  # Leftmost right pixel
+        
+        # Convert to numpy arrays
+        if len(left_points) > 10:
+            left_lane = np.array(left_points)
+        
+        if len(right_points) > 10:
+            right_lane = np.array(right_points)
+        
+        # Calculate lane center and departure
+        if left_lane is not None and right_lane is not None:
             # Interpolate lanes to have same number of points
             max_len = max(len(left_lane), len(right_lane))
             
@@ -364,119 +476,121 @@ class LaneDetector(ONNXModel):
                 right_x = np.interp(right_y, right_lane[:, 1], right_lane[:, 0])
                 right_lane = np.column_stack([right_x, right_y])
             
-            # Now calculate center with matching shapes
+            # Calculate center with matching shapes
             lane_center = (left_lane + right_lane) / 2
             
-            image_center = original_image.shape[1] / 2
-            lane_bottom_center = lane_center[-1][0] if len(lane_center) > 0 else image_center
-            lane_departure = (lane_bottom_center - image_center) / image_center
+            # Calculate departure at bottom of image
+            lane_bottom_center = lane_center[-1][0] if len(lane_center) > 0 else image_center_x
+            lane_departure = (lane_bottom_center - image_center_x) / image_center_x
         
-        confidence = 0.8 if left_lane is not None and right_lane is not None else 0.3
-        left_lane = self._smooth_lane(left_lane)
-        right_lane = self._smooth_lane(right_lane)
-        
-        return LaneResult(left_lane, right_lane, lane_center, lane_departure, confidence, seg_mask)
+        return lane_departure
     
-    def _extract_lane_from_mask(self, mask: np.ndarray, side: str) -> Optional[np.ndarray]:
-        """Extract lane points from segmentation mask"""
-        h, w = mask.shape
-        
-        # Get all lane pixels (non-background)
-        lane_pixels = np.where(mask > 0)
-        if len(lane_pixels[0]) == 0:
+    def _refine_lane_mask(self, lane_result: np.ndarray) -> np.ndarray:
+        """Refine lane segmentation mask: sharpen, connect close regions, remove noise"""
+
+        if lane_result is None:
             return None
         
-        # Split into left and right based on image center
-        center_x = w // 2
+        refined_mask = np.zeros_like(lane_result)
+        h, w = lane_result.shape
         
-        if side == 'left':
-            valid_mask = lane_pixels[1] < center_x
-        else:
-            valid_mask = lane_pixels[1] >= center_x
+        # Process each lane class separately (1-7)
+        for class_id in range(1, 8):
+            # Extract binary mask for this class
+            class_mask = (lane_result == class_id).astype(np.uint8)
+            
+            if np.sum(class_mask) == 0:
+                continue
+            
+            # Step 1: Connect nearby components using morphological closing
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            connected_mask = cv2.morphologyEx(class_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+            
+            # Step 2: Remove small components AND components far from bottom of image
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(connected_mask, connectivity=8)
+            
+            min_size = 800  # Minimum pixels to keep a component
+            min_bottom_y = h * 0.3  # Component must extend to at least bottom 70% of image
+            
+            for i in range(1, num_labels):
+                area = stats[i, cv2.CC_STAT_AREA]
+                if area < min_size:
+                    continue  # Skip small components
+                
+                # Get all points in this component
+                component_mask = (labels == i).astype(np.uint8)
+                points = np.column_stack(np.where(component_mask > 0))  # (y, x) format
+                
+                if len(points) < 10:
+                    continue
+                
+                # Check if component extends toward bottom of image (lanes should)
+                max_y = points[:, 0].max()
+                if max_y < min_bottom_y:
+                    continue  # Skip components that don't reach lower part of image
+                
+                # Convert to (x, y) format
+                y_coords = points[:, 0]
+                x_coords = points[:, 1]
+                
+                # Sort by y-coordinate (top to bottom)
+                sorted_indices = np.argsort(y_coords)
+                y_coords = y_coords[sorted_indices]
+                x_coords = x_coords[sorted_indices]
+                
+                # Fit polynomial curve
+                try:
+                    degree = 2  # Use 2 for gentle curves, 3 for more complex lanes
+                    coeffs = np.polyfit(y_coords, x_coords, degree)
+                    poly = np.poly1d(coeffs)
+                    
+                    # Generate smooth curve points
+                    y_smooth = np.arange(y_coords.min(), y_coords.max() + 1)
+                    x_smooth = poly(y_smooth).astype(np.int32)
+                    
+                    # Clip x coordinates to image bounds
+                    x_smooth = np.clip(x_smooth, 0, refined_mask.shape[1] - 1)
+                    
+                    # Draw the smooth curve with thickness
+                    points_smooth = np.column_stack((x_smooth, y_smooth))
+                    cv2.polylines(refined_mask, [points_smooth], False, class_id, thickness=8)
+                    
+                except:
+                    # If polynomial fitting fails, just keep original component
+                    refined_mask[component_mask == 1] = class_id
         
-        if not np.any(valid_mask):
-            return None
-        
-        y_coords = lane_pixels[0][valid_mask]
-        x_coords = lane_pixels[1][valid_mask]
-        
-        if len(y_coords) < 10:
-            return None
-        
-        # Group by y-coordinate and take median x for each y
-        unique_y = np.unique(y_coords)
-        points = []
-        for y in unique_y:
-            x_values = x_coords[y_coords == y]
-            points.append([np.median(x_values), y])
-        
-        return np.array(points)
-    
-    def _smooth_lane(self, lane: np.ndarray) -> np.ndarray:
-        """Smooth lane using temporal history"""
-        if lane is None:
-            return None
-        
-        # Only smooth if lane has consistent shape
-        if len(self.lane_history) > 0:
-            # Check if new lane has same shape as previous
-            if self.lane_history[-1] is not None and lane.shape != self.lane_history[-1].shape:
-                # Clear history if shape changed
-                self.lane_history = []
-        
-        self.lane_history.append(lane)
-        if len(self.lane_history) > self.history_size:
-            self.lane_history.pop(0)
-        
-        # Only average if we have multiple frames with same shape
-        if len(self.lane_history) > 1:
-            try:
-                return np.mean(self.lane_history, axis=0)
-            except ValueError:
-                # If averaging fails due to shape mismatch, clear history and return current
-                self.lane_history = [lane]
-                return lane
-        
-        return lane
+        return refined_mask
     
     def draw_lanes(self, image: np.ndarray, lane_result: LaneResult) -> np.ndarray:
         """Draw detected lanes on image with segmentation overlay"""
         overlay = image.copy()
+        h, w = image.shape[:2]
         
-        # Draw segmentation mask as colored overlay (similar to plt.imshow with jet colormap and alpha)
-        if lane_result.segmentation_mask is not None:
-            colored_mask = np.zeros_like(image)
-            for class_id in range(1, 8):  # Lane classes 1-7
-                mask = lane_result.segmentation_mask == class_id
-                if class_id < len(self.lane_colors):
-                    colored_mask[mask] = self.lane_colors[class_id]
-            
-            # Blend with original image (alpha=0.3)
-            overlay = cv2.addWeighted(overlay, 1.0, colored_mask, 0.3, 0)
+        lane_mask = lane_result.lane_mask
+
+        # Normalize mask values from 1-7 to 0-255 for colormap application
+        mask_normalized = np.zeros_like(lane_mask, dtype=np.uint8)
+        mask_normalized[lane_mask > 0] = ((lane_mask[lane_mask > 0] - 1) * 255 // 6).astype(np.uint8)
         
-        # Draw lane points as circles (like ground truth visualization)
-        if lane_result.left_lane is not None:
-            pts = lane_result.left_lane.astype(np.int32)
-            for pt in pts:
-                cv2.circle(overlay, tuple(pt), radius=3, color=(0, 255, 0), thickness=-1)
+        # Apply jet colormap
+        colored_mask = cv2.applyColorMap(mask_normalized, cv2.COLORMAP_JET)
         
-        if lane_result.right_lane is not None:
-            pts = lane_result.right_lane.astype(np.int32)
-            for pt in pts:
-                cv2.circle(overlay, tuple(pt), radius=3, color=(0, 255, 0), thickness=-1)
+        # Create binary mask for valid lane pixels (where lane_mask >= 1)
+        valid_mask = (lane_mask >= 1).astype(np.uint8)
+        valid_mask_3ch = np.stack([valid_mask] * 3, axis=-1)
         
-        # Draw lane center line
-        if lane_result.lane_center is not None:
-            pts = lane_result.lane_center.astype(np.int32)
-            cv2.polylines(overlay, [pts], False, (255, 255, 0), 2)
+        # Apply the colored mask only where valid lanes exist
+        colored_mask = colored_mask * valid_mask_3ch
+        
+        # Blend with original image (alpha=0.7)
+        overlay = cv2.addWeighted(overlay, 1.0, colored_mask, 0.7, 0)
         
         # Draw lane departure indicator
-        h, w = image.shape[:2]
         center_x = int(w / 2)
         departure_pixels = int(lane_result.lane_departure * w / 2)
         
         color = (0, 255, 0) if abs(lane_result.lane_departure) < 0.1 else (0, 165, 255) if abs(lane_result.lane_departure) < 0.3 else (0, 0, 255)
-        cv2.circle(overlay, (center_x + departure_pixels, h - 50), 10, color, -1)
+        # cv2.circle(overlay, (center_x + departure_pixels, h - 50), 10, color, -1)
         cv2.putText(overlay, f"Departure: {lane_result.lane_departure:.2f}", (10, h - 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
@@ -729,13 +843,13 @@ class AdasSystem:
         
         # Object & Pedestrian Detection (Always process - most critical for safety)
         obj_input = self.object_detector.preprocess(frame)
-        obj_output = self.object_detector.inference(obj_input)
+        obj_output = self.object_detector.inference(obj_input/255.0)
         detections = self.object_detector.postprocess(obj_output, frame, depth_frame, self.kinect)
         
         # Traffic Sign Detection (Process every 5 frames for Pi 5 optimization)
         if self.frame_counter % self.sign_process_interval == 0:
             sign_input = self.sign_detector.preprocess(frame)
-            sign_output = self.sign_detector.inference(sign_input)
+            sign_output = self.sign_detector.inference(sign_input/255.0)
             self.last_sign_detections = self.sign_detector.postprocess(sign_output, frame, depth_frame, self.kinect)
         
         sign_detections = self.last_sign_detections
