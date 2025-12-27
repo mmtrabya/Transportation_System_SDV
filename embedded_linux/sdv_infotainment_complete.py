@@ -1,42 +1,72 @@
 #!/usr/bin/env python3
 """
-Complete SDV Infotainment System for Raspberry Pi 5
-- Vehicle unlock with Firebase
-- Multi-screen dashboard (Speedometer, Trip, Media, Climate, ADAS)
-- Real-time MPU9250 speedometer
-- Live ADAS camera feed
-- Spotify/Anghami integration
-- Climate control
-- Firebase trip tracking
+Complete SDV Infotainment System with ADAS Integration
+- Imports ADAS modules directly
+- Fixed Qt/OpenCV conflict
+- Live AI-processed ADAS feed
 
-RUN: python3 sdv_infotainment_complete.py
+RUN: python3 sdv_infotainment_adas_integrated.py
 """
 
 import sys
 import os
-os.environ['QT_QPA_PLATFORM'] = 'xcb'
 
+# Add ADAS script directory to path
+ADAS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "raspberry_pi")
+if os.path.exists(ADAS_DIR):
+    sys.path.insert(0, ADAS_DIR)
+    print(f"✓ Added ADAS path: {ADAS_DIR}")
+else:
+    print(f"WARNING: ADAS directory not found at: {ADAS_DIR}")
+    print("Please check the path to your adas_inference_optimized.py")
+
+# CRITICAL FIX: Remove cv2's Qt plugin path to prevent conflict
+import site
+for site_path in site.getsitepackages() + [site.getusersitepackages()]:
+    cv2_qt_plugins = os.path.join(site_path, 'cv2', 'qt', 'plugins')
+    if os.path.exists(cv2_qt_plugins):
+        # Rename it so cv2 can't find it
+        try:
+            backup_path = cv2_qt_plugins + '_backup'
+            if not os.path.exists(backup_path):
+                os.rename(cv2_qt_plugins, backup_path)
+                print(f"✓ Disabled cv2 Qt plugins at: {cv2_qt_plugins}")
+        except:
+            pass
+
+# Set Qt environment BEFORE any imports
+os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = '/usr/lib/x86_64-linux-gnu/qt5/plugins'
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+os.environ['QT_DEBUG_PLUGINS'] = '0'
+
+# Now import PyQt5
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from PyQt5.QtMultimedia import *
-from PyQt5.QtMultimediaWidgets import *
-import cv2
 import numpy as np
 import time
-import json
 from pathlib import Path
 from datetime import datetime
 import serial
-import struct
 
-# Try Firebase (optional)
+# Import cv2 AFTER PyQt5
+import cv2
+
+# Import ADAS components from your existing script
 try:
-    import firebase_admin
-    from firebase_admin import credentials, firestore
-    FIREBASE_AVAILABLE = True
-except:
-    FIREBASE_AVAILABLE = False
+    from adas_inference_optimized import (
+        AdasSystem,
+        KinectCamera,
+        LaneDetector,
+        ObjectDetector,
+        SIGN_CLASSES
+    )
+    ADAS_AVAILABLE = True
+    print("✓ ADAS modules imported successfully")
+except ImportError as e:
+    print(f"✗ Could not import ADAS modules: {e}")
+    print(f"  Make sure adas_inference_optimized.py is in: {ADAS_DIR}")
+    ADAS_AVAILABLE = False
 
 # ==================== CONFIGURATION ====================
 
@@ -46,14 +76,14 @@ class Config:
     SCREEN_HEIGHT = 600
     FULLSCREEN = True
     
-    # Firebase
-    FIREBASE_CREDENTIALS = str(Path.home() / "sdv_firebase_key.json")
-    FIREBASE_DATABASE_URL = "https://sdv-ota-system-default-rtdb.europe-west1.firebasedatabase.app"
-    VEHICLE_ID = "SDV_001"
-    
     # Serial Ports
     ATMEGA32_PORT = "/dev/ttyUSB0"
     ATMEGA32_BAUDRATE = 115200
+    
+    # ADAS Model Paths
+    LANE_MODEL = "../models/Lane_Detection/scnn.onnx"
+    OBJECT_MODEL = "../models/Object_Detection/yolov8n.onnx"
+    SIGN_MODEL = "../models/Traffic_Sign/last.onnx"
     
     # Colors
     PRIMARY_COLOR = "#00BCD4"
@@ -81,6 +111,7 @@ class MPU9250Reader(QThread):
         try:
             self.serial = serial.Serial(port, baudrate, timeout=0.1)
             time.sleep(2)
+            print(f"✓ Connected to MPU9250 on {port}")
         except Exception as e:
             print(f"MPU9250 Reader: {e}")
     
@@ -90,83 +121,106 @@ class MPU9250Reader(QThread):
         while self.running:
             try:
                 if self.serial and self.serial.in_waiting > 0:
-                    # Read IMU data packet
-                    data = self._read_imu_packet()
-                    if data:
+                    line = self.serial.readline().decode('ascii', errors='ignore').strip()
+                    if line.startswith("IMU:"):
+                        parts = line[4:].split(',')
+                        data = {
+                            'speed': float(parts[0]) if len(parts) > 0 else 0.0,
+                            'heading': float(parts[1]) if len(parts) > 1 else 0.0,
+                            'accel': float(parts[2]) if len(parts) > 2 else 0.0,
+                        }
                         self.data_ready.emit(data)
                 
-                time.sleep(0.05)  # 20Hz
+                time.sleep(0.05)
             except:
-                time.sleep(0.1)
-    
-    def _read_imu_packet(self):
-        """Parse IMU data packet"""
-        # Simplified - adapt to your protocol
-        try:
-            line = self.serial.readline().decode('ascii', errors='ignore').strip()
-            if line.startswith("IMU:"):
-                parts = line[4:].split(',')
-                return {
-                    'speed': float(parts[0]) if len(parts) > 0 else 0.0,
-                    'heading': float(parts[1]) if len(parts) > 1 else 0.0,
-                    'accel': float(parts[2]) if len(parts) > 2 else 0.0,
+                # Simulation fallback
+                data = {
+                    'speed': np.random.uniform(0, 120),
+                    'heading': np.random.uniform(0, 360),
+                    'accel': np.random.uniform(-2, 2),
                 }
-        except:
-            pass
-        
-        # Fallback simulation
-        return {
-            'speed': np.random.uniform(0, 120),
-            'heading': np.random.uniform(0, 360),
-            'accel': np.random.uniform(-2, 2),
-        }
+                self.data_ready.emit(data)
+                time.sleep(0.1)
     
     def stop(self):
         self.running = False
         if self.serial:
             self.serial.close()
 
-# ==================== KINECT CAMERA FEED ====================
+# ==================== ADAS FEED WITH AI PROCESSING ====================
 
-class KinectFeed(QThread):
-    """ADAS Kinect camera feed"""
-    frame_ready = pyqtSignal(np.ndarray)
+class AdasFeedThread(QThread):
+    """Run ADAS system in background thread"""
+    frame_ready = pyqtSignal(np.ndarray, dict)
     
     def __init__(self):
         super().__init__()
         self.running = False
+        self.adas = None
         
-        # Try Kinect (freenect)
+        if not ADAS_AVAILABLE:
+            print("✗ ADAS modules not available - camera feed will be disabled")
+            return
+        
+        print("=" * 60)
+        print("Initializing ADAS System...")
+        print("=" * 60)
+        
         try:
-            import freenect
-            self.use_kinect = True
-        except:
-            self.use_kinect = False
-            self.cap = cv2.VideoCapture(0)
+            self.adas = AdasSystem(
+                Config.LANE_MODEL,
+                Config.OBJECT_MODEL,
+                Config.SIGN_MODEL
+            )
+            print("✓ ADAS System Ready!")
+        except Exception as e:
+            print(f"✗ ADAS initialization failed: {e}")
     
     def run(self):
+        if self.adas is None:
+            print("ADAS not available")
+            return
+        
         self.running = True
+        frame_count = 0
+        
+        print("Starting ADAS processing loop...")
         
         while self.running:
             try:
-                if self.use_kinect:
-                    import freenect
-                    frame = freenect.sync_get_video()[0]
-                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                else:
-                    ret, frame = self.cap.read()
-                    if not ret:
-                        continue
+                # Get frame from Kinect
+                frame, depth = self.adas.kinect.get_frame()
                 
-                self.frame_ready.emit(frame)
-                time.sleep(0.033)  # 30fps
-            except:
+                if frame is None:
+                    time.sleep(0.01)
+                    continue
+                
+                frame_count += 1
+                
+                # Process with ADAS AI
+                annotated, results = self.adas.process(frame, depth)
+                
+                # Emit to Qt GUI
+                self.frame_ready.emit(annotated, results)
+                
+                # Log periodically
+                if frame_count % 60 == 0:
+                    print(f"ADAS Frame {frame_count} | FPS: {results['fps']:.1f} | "
+                          f"Objects: {len(results['objects'])} | "
+                          f"Pedestrians: {len(results['pedestrians'])} | "
+                          f"Signs: {len(results['signs'])}")
+                
+                time.sleep(0.001)  # Minimal delay
+                
+            except Exception as e:
+                print(f"ADAS processing error: {e}")
                 time.sleep(0.1)
     
     def stop(self):
         self.running = False
-        if not self.use_kinect and self.cap:
-            self.cap.release()
+        if self.adas:
+            self.adas.release()
+        print("ADAS thread stopped")
 
 # ==================== SPEEDOMETER WIDGET ====================
 
@@ -209,7 +263,6 @@ class SpeedometerWidget(QWidget):
             painter.setPen(QPen(QColor("#888888"), 2))
             painter.drawLine(int(x1), int(y1), int(x2), int(y2))
             
-            # Numbers
             if i % 40 == 0:
                 painter.setPen(QColor(Config.TEXT_COLOR))
                 painter.setFont(QFont("Arial", 12, QFont.Bold))
@@ -245,11 +298,9 @@ class UnlockScreen(QWidget):
     """Vehicle unlock screen"""
     unlocked = pyqtSignal(dict)
     
-    def __init__(self, firebase_manager=None):
+    def __init__(self):
         super().__init__()
-        self.firebase_manager = firebase_manager
         self.booking_data = None
-        
         self.initUI()
         self.check_for_booking()
     
@@ -257,19 +308,16 @@ class UnlockScreen(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(50, 50, 50, 50)
         
-        # Title
         title = QLabel("🚗 VEHICLE UNLOCK")
         title.setStyleSheet(f"font-size: 48px; font-weight: bold; color: {Config.PRIMARY_COLOR};")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
-        # Status
         self.status_label = QLabel("⏳ Checking for booking...")
         self.status_label.setStyleSheet("font-size: 24px; color: #999;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
-        # Code input
         self.code_input = QLineEdit()
         self.code_input.setPlaceholderText("Enter unlock code")
         self.code_input.setMaxLength(4)
@@ -282,7 +330,6 @@ class UnlockScreen(QWidget):
         """)
         layout.addWidget(self.code_input)
         
-        # Numpad
         layout.addWidget(self.create_numpad())
         
         self.setLayout(layout)
@@ -350,7 +397,7 @@ class UnlockScreen(QWidget):
             self.code_input.clear()
     
     def check_for_booking(self):
-        # Simulated booking (replace with Firebase)
+        # Simulated booking
         self.booking_data = {
             'bookingId': 'TEST_BOOKING',
             'unlockCode': '1234',
@@ -373,11 +420,9 @@ class SpeedometerScreen(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # Speedometer
         self.speedometer = SpeedometerWidget()
         layout.addWidget(self.speedometer, alignment=Qt.AlignCenter)
         
-        # Info panel
         info = QHBoxLayout()
         
         self.trip_label = QLabel("Trip: 0.0 km")
@@ -398,7 +443,7 @@ class SpeedometerScreen(QWidget):
         self.heading_label.setText(f"Heading: {int(data['heading'])}°")
 
 class MediaScreen(QWidget):
-    """Media player screen (Spotify/Anghami style)"""
+    """Media player screen"""
     
     def __init__(self):
         super().__init__()
@@ -413,7 +458,6 @@ class MediaScreen(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
-        # Album art
         art = QLabel()
         pixmap = QPixmap(300, 300)
         pixmap.fill(QColor(Config.PANEL_COLOR))
@@ -421,15 +465,12 @@ class MediaScreen(QWidget):
         art.setAlignment(Qt.AlignCenter)
         layout.addWidget(art)
         
-        # Track info
         track = QLabel("Connect your phone via\nBluetooth or Android Auto")
         track.setStyleSheet("font-size: 22px; color: #999; padding: 20px;")
         track.setAlignment(Qt.AlignCenter)
         layout.addWidget(track)
         
-        # Controls
         controls = QHBoxLayout()
-        
         for icon in ['⏮', '⏯', '⏭']:
             btn = QPushButton(icon)
             btn.setMinimumSize(80, 80)
@@ -462,13 +503,11 @@ class ClimateScreen(QWidget):
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
-        # Temperature display
         self.temp_label = QLabel(f"{self.temperature}°C")
         self.temp_label.setStyleSheet(f"font-size: 120px; font-weight: bold; color: {Config.PRIMARY_COLOR};")
         self.temp_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.temp_label)
         
-        # Controls
         controls = QHBoxLayout()
         
         dec_btn = QPushButton("−")
@@ -502,12 +541,12 @@ class ClimateScreen(QWidget):
         self.temp_label.setText(f"{self.temperature}°C")
 
 class ADASCameraScreen(QWidget):
-    """Live ADAS camera feed"""
+    """Live ADAS camera feed with AI processing"""
     
-    def __init__(self, kinect_feed):
+    def __init__(self, adas_thread):
         super().__init__()
-        self.kinect_feed = kinect_feed
-        self.kinect_feed.frame_ready.connect(self.update_frame)
+        self.adas_thread = adas_thread
+        self.adas_thread.frame_ready.connect(self.update_frame)
         
         self.initUI()
     
@@ -515,21 +554,40 @@ class ADASCameraScreen(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
         
-        title = QLabel("📹 ADAS CAMERA FEED")
-        title.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {Config.PRIMARY_COLOR};")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        # Header
+        header = QHBoxLayout()
         
+        title = QLabel("📹 ADAS AI CAMERA")
+        title.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {Config.PRIMARY_COLOR};")
+        header.addWidget(title)
+        
+        header.addStretch()
+        
+        self.stats_label = QLabel("FPS: -- | Objects: 0")
+        self.stats_label.setStyleSheet("font-size: 18px; color: #4CAF50;")
+        header.addWidget(self.stats_label)
+        
+        layout.addLayout(header)
+        
+        # Video display
         self.video_label = QLabel()
-        self.video_label.setStyleSheet(f"background: {Config.PANEL_COLOR};")
+        self.video_label.setStyleSheet(f"background: {Config.PANEL_COLOR}; border: 2px solid {Config.PRIMARY_COLOR};")
         self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setMinimumSize(900, 500)
         layout.addWidget(self.video_label)
+        
+        # Detection info
+        self.info_label = QLabel("Waiting for ADAS data...")
+        self.info_label.setStyleSheet("font-size: 16px; color: #999; padding: 10px;")
+        self.info_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.info_label)
         
         self.setLayout(layout)
         self.setStyleSheet(f"background: {Config.BG_COLOR};")
     
-    def update_frame(self, frame):
-        frame = cv2.resize(frame, (960, 540))
+    def update_frame(self, frame, results):
+        # Resize for display
+        frame = cv2.resize(frame, (900, 500))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         h, w, ch = frame.shape
@@ -537,6 +595,26 @@ class ADASCameraScreen(QWidget):
         qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
         
         self.video_label.setPixmap(QPixmap.fromImage(qt_image))
+        
+        # Update stats
+        self.stats_label.setText(
+            f"FPS: {results['fps']:.1f} | "
+            f"Objects: {len(results['objects'])} | "
+            f"Pedestrians: {len(results['pedestrians'])} | "
+            f"Signs: {len(results['signs'])}"
+        )
+        
+        # Update info
+        info_text = []
+        if len(results['pedestrians']) > 0:
+            info_text.append(f"⚠️ {len(results['pedestrians'])} Pedestrian(s) detected!")
+        if len(results['signs']) > 0:
+            signs = [s.class_name for s in results['signs']]
+            info_text.append(f"🚦 Signs: {', '.join(signs[:3])}")
+        if abs(results['lane'].lane_departure) > 0.3:
+            info_text.append(f"⚠️ Lane departure: {results['lane'].lane_departure:.2f}")
+        
+        self.info_label.setText(" | ".join(info_text) if info_text else "✓ All clear")
 
 # ==================== MAIN INFOTAINMENT APP ====================
 
@@ -546,12 +624,16 @@ class InfotainmentApp(QMainWindow):
     def __init__(self):
         super().__init__()
         
+        print("\n" + "=" * 60)
+        print("SDV INFOTAINMENT SYSTEM STARTING")
+        print("=" * 60)
+        
         # Initialize hardware interfaces
         self.mpu_reader = MPU9250Reader()
         self.mpu_reader.start()
         
-        self.kinect_feed = KinectFeed()
-        self.kinect_feed.start()
+        self.adas_thread = AdasFeedThread()
+        self.adas_thread.start()
         
         self.setup_ui()
     
@@ -559,11 +641,9 @@ class InfotainmentApp(QMainWindow):
         self.setWindowTitle("SDV Infotainment System")
         self.setGeometry(0, 0, Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT)
         
-        # Create stack for screens
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
         
-        # Create unlock screen
         self.unlock_screen = UnlockScreen()
         self.unlock_screen.unlocked.connect(self.on_unlock)
         self.stack.addWidget(self.unlock_screen)
@@ -574,9 +654,8 @@ class InfotainmentApp(QMainWindow):
             self.showFullScreen()
     
     def on_unlock(self, booking_data):
-        print(f"Vehicle unlocked: {booking_data}")
+        print(f"✓ Vehicle unlocked: {booking_data}")
         
-        # Create main dashboard with tabs
         dashboard = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -593,11 +672,10 @@ class InfotainmentApp(QMainWindow):
             QTabBar::tab:hover { background: #3D3D3D; }
         """)
         
-        # Add all screens
         tabs.addTab(SpeedometerScreen(self.mpu_reader), "🚗 Speed")
         tabs.addTab(MediaScreen(), "🎵 Media")
         tabs.addTab(ClimateScreen(), "❄️ Climate")
-        tabs.addTab(ADASCameraScreen(self.kinect_feed), "📹 ADAS")
+        tabs.addTab(ADASCameraScreen(self.adas_thread), "📹 ADAS")
         
         layout.addWidget(tabs)
         dashboard.setLayout(layout)
@@ -615,8 +693,12 @@ class InfotainmentApp(QMainWindow):
                 self.showFullScreen()
     
     def closeEvent(self, event):
+        print("\nShutting down...")
         self.mpu_reader.stop()
-        self.kinect_feed.stop()
+        self.adas_thread.stop()
+        self.mpu_reader.wait()
+        self.adas_thread.wait()
+        print("✓ Clean shutdown")
         event.accept()
 
 # ==================== MAIN ====================

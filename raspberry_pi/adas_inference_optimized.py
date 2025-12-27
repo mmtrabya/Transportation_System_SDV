@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ADAS ONNX Model Inference System (Fixed)
-- Fixed background frame capture
-- Fixed data type issue
-- Simpler, more reliable approach
+ADAS ONNX Model Inference System (Display Fixed)
+- Fixed Qt/xcb display issues by removing QT_QPA_PLATFORM override
+- Auto-detects headless environment properly
+- Works on systems with or without display
 """
 
 import cv2
@@ -16,6 +16,9 @@ import logging
 import os
 import sys
 
+# Only set ONNX logging level, don't touch Qt settings
+os.environ['ORT_LOGGING_LEVEL'] = '3'
+
 # Import freenect
 try:
     import freenect
@@ -25,11 +28,29 @@ except ImportError:
     print("[ERROR] freenect not available!")
     sys.exit(1)
 
-# Suppress ONNX warnings
-os.environ['ORT_LOGGING_LEVEL'] = '3'
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('ADAS')
+
+# ==================== DISPLAY DETECTION ====================
+
+def detect_display():
+    """Detect if display is available"""
+    # Check DISPLAY environment variable
+    if 'DISPLAY' not in os.environ or not os.environ['DISPLAY']:
+        logger.info("No DISPLAY environment variable - headless mode")
+        return False
+    
+    # Try to create a test window
+    try:
+        test_window = 'adas_display_test'
+        cv2.namedWindow(test_window, cv2.WINDOW_NORMAL)
+        cv2.destroyWindow(test_window)
+        cv2.waitKey(1)  # Process the destroy event
+        logger.info("Display available - GUI mode enabled")
+        return True
+    except Exception as e:
+        logger.info(f"Display test failed ({e}) - headless mode")
+        return False
 
 # ==================== DATA STRUCTURES ====================
 
@@ -64,10 +85,10 @@ SIGN_CLASSES = {
     42: 'End no pass >3.5t'
 }
 
-# ==================== KINECT CAMERA (SIMPLIFIED) ====================
+# ==================== KINECT CAMERA ====================
 
 class KinectCamera:
-    """Simple synchronous Kinect wrapper - no threading, just works"""
+    """Simple synchronous Kinect wrapper"""
 
     def __init__(self):
         self.connected = False
@@ -80,18 +101,16 @@ class KinectCamera:
         logger.info("CONNECTING TO KINECT")
         logger.info("=" * 60)
 
-        # Set environment
         os.environ.setdefault("FREENECT_DISABLE_AUDIO", "1")
         
-        # Kill any stuck processes
+        # Kill stuck processes
         try:
             os.system("pkill -9 -f freenect 2>/dev/null")
             time.sleep(0.2)
         except:
             pass
 
-        # Connect
-        logger.info("Initializing Kinect (may take a few seconds)...")
+        logger.info("Initializing Kinect...")
         start_time = time.time()
         
         try:
@@ -119,7 +138,6 @@ class KinectCamera:
             return None, None
 
         try:
-            # Get RGB
             rgb_result = freenect.sync_get_video()
             if not rgb_result or rgb_result[0] is None:
                 return None, None
@@ -127,7 +145,6 @@ class KinectCamera:
             rgb_frame = rgb_result[0]
             rgb_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
 
-            # Get depth
             depth_frame = None
             try:
                 depth_result = freenect.sync_get_depth()
@@ -212,12 +229,12 @@ class ONNXModel:
             raise
     
     def preprocess(self, image: np.ndarray) -> np.ndarray:
-        """Preprocess image - returns float32"""
+        """Preprocess image"""
         img = cv2.resize(image, (self.input_width, self.input_height))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = np.transpose(img, (2, 0, 1))
         img = np.expand_dims(img, axis=0)
-        return img.astype(np.float32)  # CRITICAL: Ensure float32
+        return img.astype(np.float32)
     
     def inference(self, preprocessed_input: np.ndarray) -> List[np.ndarray]:
         """Run inference"""
@@ -234,16 +251,13 @@ class LaneDetector(ONNXModel):
         """Postprocess lane output"""
         output = outputs[0]
         
-        # Softmax
         exp_x = np.exp(output - np.max(output, axis=1, keepdims=True))
         seg_pred = exp_x / np.sum(exp_x, axis=1, keepdims=True)
         seg_mask = np.argmax(seg_pred[0], axis=0)
         
-        # Resize
         h, w = original_image.shape[:2]
         seg_mask = cv2.resize(seg_mask, (w, h), interpolation=cv2.INTER_NEAREST)
         
-        # Calculate departure
         departure = self._calc_departure(seg_mask, (h, w))
         
         return LaneResult(seg_mask, departure, 0.8, None)
@@ -253,7 +267,6 @@ class LaneDetector(ONNXModel):
         h, w = shape
         center_x = w / 2
         
-        # Bottom half
         bottom = mask[h//2:, :]
         lane_px = np.where(bottom > 0)
         
@@ -270,12 +283,10 @@ class LaneDetector(ONNXModel):
         overlay = image.copy()
         
         if result.lane_mask is not None:
-            # Green overlay for lanes
             colored = np.zeros_like(image)
             colored[result.lane_mask > 0] = [0, 255, 0]
             overlay = cv2.addWeighted(overlay, 0.7, colored, 0.3, 0)
         
-        # Departure indicator
         h, w = image.shape[:2]
         color = (0, 255, 0) if abs(result.lane_departure) < 0.1 else (0, 165, 255) if abs(result.lane_departure) < 0.3 else (0, 0, 255)
         cv2.putText(overlay, f"Departure: {result.lane_departure:.2f}", 
@@ -307,7 +318,6 @@ class ObjectDetector(ONNXModel):
         """YOLOv8 postprocess"""
         output = outputs[0]
         
-        # Transpose if needed
         if output.shape[1] < output.shape[2]:
             output = output.transpose(0, 2, 1)
         
@@ -328,7 +338,6 @@ class ObjectDetector(ONNXModel):
             if confidence < self.conf_threshold or class_id not in self.class_names:
                 continue
             
-            # Bounding box
             x1 = int((x_center - width / 2) * scale_x)
             y1 = int((y_center - height / 2) * scale_y)
             x2 = int((x_center + width / 2) * scale_x)
@@ -339,7 +348,6 @@ class ObjectDetector(ONNXModel):
             x2 = max(0, min(x2, w))
             y2 = max(0, min(y2, h))
             
-            # Distance
             distance = None
             if depth_frame is not None and kinect is not None:
                 distance = kinect.get_bbox_distance(depth_frame, (x1, y1, x2, y2))
@@ -505,21 +513,42 @@ class AdasSystem:
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--headless', action='store_true', help='Force headless mode')
+    parser.add_argument('--save-interval', type=int, default=30, help='Save frame every N frames in headless mode')
+    parser.add_argument('--output-dir', default='output', help='Output directory for saved frames')
     args = parser.parse_args()
     
+    # Detect display availability (only if not forced headless)
+    DISPLAY_AVAILABLE = False
+    if not args.headless:
+        DISPLAY_AVAILABLE = detect_display()
+        if not DISPLAY_AVAILABLE:
+            logger.warning("Display not available - switching to headless mode")
+            args.headless = True
+    else:
+        logger.info("Headless mode forced via command line")
+    
+    # Create output directory
+    if args.headless:
+        os.makedirs(args.output_dir, exist_ok=True)
+        logger.info(f"Saving frames to: {args.output_dir}/")
+    
     # Model paths
-    LANE = "models/Lane_Detection/scnn.onnx"
-    OBJECT = "models/Object_Detection/yolov8n.onnx"
-    SIGN = "models/Traffic_Sign/last.onnx"
+    LANE = "../models/Lane_Detection/scnn.onnx"
+    OBJECT = "../models/Object_Detection/yolov8n.onnx"
+    SIGN = "../models/Traffic_Sign/last.onnx"
     
     logger.info("=" * 60)
     logger.info("STARTING ADAS")
+    logger.info(f"Mode: {'HEADLESS' if args.headless else 'DISPLAY'}")
     logger.info("=" * 60)
     
     adas = AdasSystem(LANE, OBJECT, SIGN)
     
-    logger.info("Press 'q' to quit")
+    if not args.headless:
+        logger.info("Press 'q' to quit")
+    else:
+        logger.info("Press Ctrl+C to quit")
     logger.info("=" * 60)
     
     frame_count = 0
@@ -537,14 +566,20 @@ def main():
             annotated, results = adas.process(frame, depth)
             
             if not args.headless:
-                cv2.imshow('ADAS', annotated)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                try:
+                    cv2.imshow('ADAS', annotated)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                except Exception as e:
+                    logger.error(f"Display error ({e}) - switching to headless mode")
+                    args.headless = True
+                    os.makedirs(args.output_dir, exist_ok=True)
             else:
-                if frame_count % 30 == 0:
-                    cv2.imwrite(f"output_{frame_count}.jpg", annotated)
-                if frame_count >= 300:
-                    break
+                # Save frames periodically
+                if frame_count % args.save_interval == 0:
+                    filename = os.path.join(args.output_dir, f"frame_{frame_count:05d}.jpg")
+                    cv2.imwrite(filename, annotated)
+                    logger.info(f"Saved: {filename}")
             
             # Stats every 30 frames
             if frame_count % 30 == 0:
@@ -554,10 +589,14 @@ def main():
                            f"Signs: {len(results['signs'])}")
                 
     except KeyboardInterrupt:
-        logger.info("Stopped")
+        logger.info("Stopped by user")
     finally:
         adas.release()
-        cv2.destroyAllWindows()
+        if not args.headless:
+            try:
+                cv2.destroyAllWindows()
+            except:
+                pass
         logger.info("Done")
 
 

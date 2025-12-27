@@ -21,7 +21,13 @@ import signal
 import atexit
 
 # Suppress ONNX Runtime warnings about CUDA
-os.environ['ORT_LOGGING_LEVEL'] = '3'  # Only show errors
+import os
+
+# Force system Qt platform plugin
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+os.environ['QT_PLUGIN_PATH'] = '/usr/lib/qt5/plugins'
+os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = '/usr/lib/qt5/plugins/platforms'
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('ADAS_Inference')
